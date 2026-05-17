@@ -274,10 +274,13 @@ fn download_icon_as_data_url(url: &str) -> Option<String> {
     }
     let engine = base64::engine::general_purpose::STANDARD;
     // Sniff MIME from first bytes; fallback to URL extension
-    let mime = if bytes.len() > 8 && &bytes[..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] {
+    let mime = if bytes.len() > 8 && &bytes[..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    {
         "image/png"
-    } else if bytes.len() > 4 && &bytes[..4] == [0x52, 0x49, 0x46, 0x46]
-        && bytes.len() > 12 && &bytes[8..12] == [0x57, 0x45, 0x42, 0x50]
+    } else if bytes.len() > 4
+        && &bytes[..4] == [0x52, 0x49, 0x46, 0x46]
+        && bytes.len() > 12
+        && &bytes[8..12] == [0x57, 0x45, 0x42, 0x50]
     {
         "image/webp"
     } else {
@@ -302,11 +305,7 @@ fn scrape_google_play(pkg: &str) -> Option<(String, String)> {
 
     // Extract label from og:title meta tag
     let title_sel = Selector::parse("meta[property='og:title']").ok()?;
-    let title = doc
-        .select(&title_sel)
-        .next()?
-        .value()
-        .attr("content")?;
+    let title = doc.select(&title_sel).next()?.value().attr("content")?;
     let label = if let Some(idx) = title.rfind(" - ") {
         title[..idx].to_string()
     } else {
@@ -554,8 +553,7 @@ fn find_best_icon_entry(cd_data: &[u8]) -> Option<ParsedIconEntry> {
             cd_data[pos + 42..pos + 46].try_into().ok()?,
         ));
         if pos + 46 + name_len <= cd_data.len() {
-            let filename =
-                std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
+            let filename = std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
             if is_icon_filename(filename) {
                 let score = icon_score(filename);
                 if score > best_score {
@@ -579,11 +577,7 @@ fn extract_icon_adb(settings: &Settings, serial: &str, package_name: &str) -> Op
     eprintln!("[scrcpy-launcher] icon: extracting for {package_name}");
 
     let output = adb_shell(settings, serial, &["pm", "path", package_name]).ok()?;
-    let apk_path = output
-        .lines()
-        .next()?
-        .strip_prefix("package:")?
-        .trim();
+    let apk_path = output.lines().next()?.strip_prefix("package:")?.trim();
     if apk_path.is_empty() {
         eprintln!("[scrcpy-launcher] icon: empty APK path for {package_name}");
         return None;
@@ -625,7 +619,10 @@ fn extract_icon_adb(settings: &Settings, serial: &str, package_name: &str) -> Op
     let read_size = std::cmp::max(65536, total_needed);
     if read_size > 65536 {
         if read_size > 5_000_000 {
-            eprintln!("[scrcpy-launcher] icon: CD too large ({} MB) for {package_name}", read_size / 1_000_000);
+            eprintln!(
+                "[scrcpy-launcher] icon: CD too large ({} MB) for {package_name}",
+                read_size / 1_000_000
+            );
             return None;
         }
         let cmd = format!("tail -c {} '{}' 2>/dev/null | base64", read_size, apk_path);
@@ -669,7 +666,9 @@ fn extract_icon_adb(settings: &Settings, serial: &str, package_name: &str) -> Op
     let icon_entry = match find_best_icon_entry(cd_data) {
         Some(e) => e,
         None => {
-            eprintln!("[scrcpy-launcher] icon: no launcher-icon entry found in CD for {package_name}");
+            eprintln!(
+                "[scrcpy-launcher] icon: no launcher-icon entry found in CD for {package_name}"
+            );
             return None;
         }
     };
@@ -869,11 +868,7 @@ fn compute_apps(settings: &Settings, serial: &str) -> Vec<AndroidApp> {
 
 struct RefreshFlag(Arc<AtomicBool>);
 
-fn worker_loop(
-    app_handle: tauri::AppHandle,
-    flag: Arc<AtomicBool>,
-    exit: Arc<AtomicBool>,
-) {
+fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Arc<AtomicBool>) {
     loop {
         if exit.load(Ordering::Relaxed) {
             return;
@@ -912,13 +907,7 @@ fn trigger_load_apps(app_handle: tauri::AppHandle, serial: String) {
     std::thread::spawn(move || {
         let settings = read_settings_from_file();
         let apps = compute_apps(&settings, &serial);
-        let _ = app_handle.emit(
-            "apps-loaded",
-            AppsLoadedEvent {
-                serial,
-                apps,
-            },
-        );
+        let _ = app_handle.emit("apps-loaded", AppsLoadedEvent { serial, apps });
     });
 }
 
@@ -1112,7 +1101,10 @@ fn launch_app(
 ) -> Result<LaunchResult, String> {
     let settings = read_settings(&app);
     let window_title = format!("scrcpy-launcher:{package_name}:{serial}");
-    eprintln!("launch_app: pkg={} serial={} title={}", package_name, serial, window_title);
+    eprintln!(
+        "launch_app: pkg={} serial={} title={}",
+        package_name, serial, window_title
+    );
 
     let maybe_child = {
         let mut map = CHILDREN.lock().unwrap();
@@ -1230,9 +1222,7 @@ pub fn run() {
 
     let exit_flag = Arc::new(AtomicBool::new(false));
     let worker_exit = exit_flag.clone();
-    let worker_handle: Arc<
-        Mutex<Option<std::thread::JoinHandle<()>>>,
-    > = Arc::new(Mutex::new(None));
+    let worker_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>> = Arc::new(Mutex::new(None));
     let setup_handle = worker_handle.clone();
 
     let app = tauri::Builder::default()
@@ -1250,9 +1240,7 @@ pub fn run() {
             let app_handle = a.handle().clone();
             let flag = Arc::new(AtomicBool::new(false));
             a.manage(RefreshFlag(flag.clone()));
-            let h = std::thread::spawn(move || {
-                worker_loop(app_handle, flag, worker_exit)
-            });
+            let h = std::thread::spawn(move || worker_loop(app_handle, flag, worker_exit));
             *setup_handle.lock().unwrap() = Some(h);
             Ok(())
         })
@@ -1262,14 +1250,15 @@ pub fn run() {
             std::process::exit(1);
         });
 
-    app.run(|_handle, event| {
-        match event {
-            tauri::RunEvent::Exit
-            | tauri::RunEvent::WindowEvent { event: tauri::WindowEvent::CloseRequested { .. }, .. } => {
-                kill_children();
-            }
-            _ => {}
+    app.run(|_handle, event| match event {
+        tauri::RunEvent::Exit
+        | tauri::RunEvent::WindowEvent {
+            event: tauri::WindowEvent::CloseRequested { .. },
+            ..
+        } => {
+            kill_children();
         }
+        _ => {}
     });
 
     // --- cleanup ---
@@ -1389,16 +1378,12 @@ mod tests {
 
     #[test]
     fn test_is_icon_filename_valid_png() {
-        assert!(is_icon_filename(
-            "res/mipmap-hdpi/ic_launcher.png"
-        ));
+        assert!(is_icon_filename("res/mipmap-hdpi/ic_launcher.png"));
     }
 
     #[test]
     fn test_is_icon_filename_valid_webp() {
-        assert!(is_icon_filename(
-            "res/mipmap-hdpi/ic_launcher.webp"
-        ));
+        assert!(is_icon_filename("res/mipmap-hdpi/ic_launcher.webp"));
     }
 
     #[test]
