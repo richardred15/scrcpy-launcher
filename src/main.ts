@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { createIcons, Battery, BatteryFull, BatteryLow, BatteryMedium, Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings, Smartphone, X } from "lucide";
+import { createIcons, Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings, Smartphone, X } from "lucide";
 import "./styles.css";
 
 type SettingsState = {
@@ -34,6 +34,8 @@ type Device = {
   model?: string;
   androidVersion?: string;
   batteryLevel?: number;
+  batteryTemperature?: number;
+  batteryCharging?: boolean;
 };
 
 type AndroidApp = {
@@ -178,25 +180,37 @@ function renderDeviceSelect(): string {
   if (state.devices.length === 1) {
     const device = state.devices[0];
     const name = device.model || device.serial;
-    const tooltip = device.androidVersion
-      ? `${device.model || device.serial} · Android ${device.androidVersion} · ${device.serial} · ${state.apps.length} apps`
-      : `${device.serial} · ${state.apps.length} apps`;
-    return `<div class="device-chip" title="${shellEscapeText(tooltip)}"><i data-lucide="smartphone"></i><span>${shellEscapeText(name)} ${batteryIcon(device.batteryLevel)}${device.batteryLevel !== undefined ? ` ${device.batteryLevel}%` : ""}</span></div>`;
+    return `<button type="button" class="device-chip clickable" title="${shellEscapeText(`${name} · ${device.serial}`)}"><i data-lucide="smartphone"></i><span>${shellEscapeText(name)}</span></button>`;
   }
 
   return `
-    <label class="device-select" title="${shellEscapeText(`${state.apps.length} apps`)}">
+    <label class="device-select">
       <i data-lucide="smartphone"></i>
       <select id="deviceSelect" aria-label="Select Android device">
         ${state.devices
           .map((device) => {
-            const name = `${device.model || device.serial}${device.androidVersion ? ` · Android ${device.androidVersion}` : ""}${device.batteryLevel !== undefined ? ` [${device.batteryLevel}%]` : ""}`;
+            const name = `${device.model || device.serial}${device.androidVersion ? ` · Android ${device.androidVersion}` : ""}`;
             return `<option value="${shellEscapeText(device.serial)}" ${device.serial === state.selectedSerial ? "selected" : ""}>${shellEscapeText(name)}</option>`;
           })
           .join("")}
       </select>
     </label>
   `;
+}
+
+function renderBatteryPill(): string {
+  const device = selectedDevice();
+  if (!device || device.batteryLevel === undefined) return "";
+  const icon = batteryIcon(device.batteryLevel);
+  const charging = device.batteryCharging ? `<i data-lucide="battery-charging"></i>` : "";
+  return `<div class="pill" title="Battery">${icon} ${device.batteryLevel}% ${charging}</div>`;
+}
+
+function renderTempPill(): string {
+  const device = selectedDevice();
+  if (!device || device.batteryTemperature === undefined) return "";
+  const temp = device.batteryTemperature;
+  return `<div class="pill" title="Temperature">${temp.toFixed(1)}°C</div>`;
 }
 
 function renderAppIcon(item: AndroidApp): string {
@@ -466,7 +480,7 @@ function render(): void {
     <main class="shell">
       <header class="topbar">
         <div class="brand">
-          <div class="brand-mark"><i data-lucide="monitor-smartphone"></i></div>
+          <div class="brand-mark"><img src="/app-icon.png" class="brand-icon" alt="" /></div>
           <div>
             <h1>scrcpy Launcher</h1>
             <p>${device ? shellEscapeText(device.serial) : "Android apps as desktop windows"}</p>
@@ -475,6 +489,8 @@ function render(): void {
         <div class="top-actions">
           ${state.tools ? renderStatusPill(state.tools.adb, "ADB") + renderStatusPill(state.tools.scrcpy, "scrcpy") : ""}
           ${renderDeviceSelect()}
+          ${renderBatteryPill()}
+          ${renderTempPill()}
           <button class="icon-button" id="reload" title="Rescan apps and devices"><i data-lucide="refresh-cw"></i></button>
           <button class="icon-button" id="settings" title="Settings"><i data-lucide="settings"></i></button>
         </div>
@@ -493,7 +509,7 @@ function render(): void {
     </main>
   `;
   try {
-    createIcons({ icons: { Battery, BatteryFull, BatteryLow, BatteryMedium, Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings, Smartphone, X } });
+    createIcons({ icons: { Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings, Smartphone, X } });
   } catch (error) {
     console.warn("Unable to render lucide icons", error);
   }
@@ -518,6 +534,13 @@ function setupEventDelegation(): void {
 
     if (target.closest("#reload")) {
       void refreshAll();
+      return;
+    }
+
+    const chip = target.closest(".device-chip:not(.muted):not(.warning)");
+    if (chip) {
+      const device = selectedDevice();
+      if (device) void launchMirror(device.serial);
       return;
     }
 
@@ -657,6 +680,15 @@ async function loadCachedMetaAndResolve(): Promise<void> {
   invoke("resolve_app_batch", { serial: state.selectedSerial, pkgs: uncached }).catch((error) => {
     console.warn("[meta] resolve batch error:", error);
   });
+}
+
+async function launchMirror(serial: string): Promise<void> {
+  try {
+    await invoke("launch_mirror", { serial });
+  } catch (error) {
+    state.error = String(error);
+    render();
+  }
 }
 
 async function launch(item: AndroidApp): Promise<void> {

@@ -82,10 +82,14 @@ button {
   width: 32px;
   height: 32px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
-  background: linear-gradient(135deg, #319795, #b7791f);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  display: block;
 }
 
 .brand h1,
@@ -155,6 +159,15 @@ button {
 .device-chip,
 .device-select {
   padding: 0 8px;
+}
+
+.device-chip.clickable {
+  cursor: pointer;
+}
+
+.device-chip.clickable:hover {
+  border-color: rgba(49, 151, 149, 0.85);
+  transform: translateY(-1px);
 }
 
 .device-chip.muted svg,

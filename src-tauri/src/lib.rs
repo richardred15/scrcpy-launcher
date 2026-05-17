@@ -123,6 +123,8 @@ struct Device {
     model: Option<String>,
     android_version: Option<String>,
     battery_level: Option<u32>,
+    battery_temperature: Option<f32>,
+    battery_charging: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -475,14 +477,25 @@ fn scrcpy_supports_display_bounds(settings: &Settings) -> bool {
     })
 }
 
-fn parse_battery_level(output: &str) -> Option<u32> {
+fn parse_battery_info(output: &str) -> (Option<u32>, Option<f32>, Option<bool>) {
+    let mut level = None;
+    let mut temperature = None;
+    let mut charging = None;
     for line in output.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("level: ") {
-            return rest.trim().parse::<u32>().ok();
+            level = rest.trim().parse::<u32>().ok();
+        } else if let Some(rest) = trimmed.strip_prefix("temperature: ") {
+            temperature = rest.trim().parse::<u32>().ok().map(|t| t as f32 / 10.0);
+        } else if let Some(rest) = trimmed.strip_prefix("status: ") {
+            charging = rest
+                .trim()
+                .parse::<u32>()
+                .ok()
+                .map(|s| s == 2 || s == 5);
         }
     }
-    None
+    (level, temperature, charging)
 }
 
 // ── ADB icon extraction ─────────────────────────────────────────────────────
@@ -821,6 +834,8 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
                 model: None,
                 android_version: None,
                 battery_level: None,
+                battery_temperature: None,
+                battery_charging: None,
             });
             continue;
         }
@@ -828,13 +843,18 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
         let android_version =
             adb_shell(settings, serial, &["getprop", "ro.build.version.release"]).ok();
         let battery = adb_shell(settings, serial, &["dumpsys", "battery"]).ok();
-        let battery_level = battery.as_deref().and_then(parse_battery_level);
+        let (battery_level, battery_temperature, battery_charging) = battery
+            .as_deref()
+            .map(parse_battery_info)
+            .unwrap_or_default();
         devices.push(Device {
             serial: serial.into(),
             state,
             model: model.filter(|v| !v.is_empty()),
             android_version: android_version.filter(|v| !v.is_empty()),
             battery_level,
+            battery_temperature,
+            battery_charging,
         });
     }
     devices
@@ -1123,6 +1143,79 @@ fn focus_window(pid: u32) -> bool {
 }
 
 #[tauri::command]
+fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResult, String> {
+    let key = format!("__mirror__:{serial}");
+    let settings = read_settings(&app);
+    let window_title = format!("scrcpy-launcher:mirror:{serial}");
+    eprintln!("launch_mirror: serial={} title={}", serial, window_title);
+
+    let maybe_child = {
+        let mut map = CHILDREN.lock().unwrap();
+        map.remove(&key)
+    };
+    if let Some(mut child) = maybe_child {
+        match child.try_wait() {
+            Ok(None) => {
+                let pid = child.id();
+                CHILDREN.lock().unwrap().insert(key, child);
+                std::thread::spawn(move || focus_window(pid));
+                return Ok(LaunchResult {
+                    used_flex_display: false,
+                    message: None,
+                });
+            }
+            _ => {}
+        }
+    }
+
+    let display_bounds = settings
+        .device_display_bounds
+        .get(&serial)
+        .map(String::as_str)
+        .or(if settings.display_bounds.is_empty() {
+            None
+        } else {
+            Some(settings.display_bounds.as_str())
+        });
+    let supports_bounds = !display_bounds.is_none() && scrcpy_supports_display_bounds(&settings);
+
+    let mut args = vec![
+        "-s".to_string(),
+        serial,
+        "--window-title".to_string(),
+        window_title,
+    ];
+
+    if let Some(bounds) = display_bounds {
+        if supports_bounds {
+            args.push("--display-bounds".to_string());
+            args.push(bounds.to_string());
+        }
+    }
+
+    let child = Command::new(&settings.scrcpy_path)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .spawn();
+    match child {
+        Ok(child) => {
+            eprintln!("launch_mirror: scrcpy spawned OK pid={}", child.id());
+            CHILDREN.lock().unwrap().insert(key, child);
+            Ok(LaunchResult {
+                used_flex_display: false,
+                message: None,
+            })
+        }
+        Err(err) => {
+            eprintln!("launch_mirror: scrcpy spawn FAILED: {}", err);
+            Err(format!("Failed to launch scrcpy: {err}"))
+        }
+    }
+}
+
+#[tauri::command]
 fn launch_app(
     app: tauri::AppHandle,
     serial: String,
@@ -1280,6 +1373,7 @@ pub fn run() {
             get_settings,
             save_settings,
             launch_app,
+            launch_mirror,
             get_cached_app_meta,
             resolve_app_batch,
             prune_cache,
@@ -1534,22 +1628,40 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_battery_level_simple() {
-        assert_eq!(parse_battery_level("  level: 85\n  status: 5\n"), Some(85));
+    fn test_parse_battery_info_full() {
+        let (lvl, temp, chg) = parse_battery_info("  level: 85\n  temperature: 350\n  status: 2\n");
+        assert_eq!(lvl, Some(85));
+        assert_eq!(temp, Some(35.0));
+        assert_eq!(chg, Some(true));
     }
 
     #[test]
-    fn test_parse_battery_level_zero() {
-        assert_eq!(parse_battery_level("  level: 0\n"), Some(0));
+    fn test_parse_battery_info_discharging() {
+        let (lvl, temp, chg) = parse_battery_info("  level: 42\n  temperature: 310\n  status: 3\n");
+        assert_eq!(lvl, Some(42));
+        assert_eq!(temp, Some(31.0));
+        assert_eq!(chg, Some(false));
     }
 
     #[test]
-    fn test_parse_battery_level_not_found() {
-        assert_eq!(parse_battery_level("  status: 5\n  health: 2\n"), None);
+    fn test_parse_battery_info_full_status() {
+        let (_, _, chg) = parse_battery_info("  status: 5\n");
+        assert_eq!(chg, Some(true));
     }
 
     #[test]
-    fn test_parse_battery_level_empty() {
-        assert_eq!(parse_battery_level(""), None);
+    fn test_parse_battery_info_not_found() {
+        let (lvl, temp, chg) = parse_battery_info("  voltage: 4348\n  technology: Li-ion\n");
+        assert_eq!(lvl, None);
+        assert_eq!(temp, None);
+        assert_eq!(chg, None);
+    }
+
+    #[test]
+    fn test_parse_battery_info_empty() {
+        let (lvl, temp, chg) = parse_battery_info("");
+        assert_eq!(lvl, None);
+        assert_eq!(temp, None);
+        assert_eq!(chg, None);
     }
 }
