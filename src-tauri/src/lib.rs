@@ -488,11 +488,7 @@ fn parse_battery_info(output: &str) -> (Option<u32>, Option<f32>, Option<bool>) 
         } else if let Some(rest) = trimmed.strip_prefix("temperature: ") {
             temperature = rest.trim().parse::<u32>().ok().map(|t| t as f32 / 10.0);
         } else if let Some(rest) = trimmed.strip_prefix("status: ") {
-            charging = rest
-                .trim()
-                .parse::<u32>()
-                .ok()
-                .map(|s| s == 2 || s == 5);
+            charging = rest.trim().parse::<u32>().ok().map(|s| s == 2 || s == 5);
         }
     }
     (level, temperature, charging)
