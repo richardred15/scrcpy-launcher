@@ -1150,17 +1150,14 @@ fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResult, 
         map.remove(&key)
     };
     if let Some(mut child) = maybe_child {
-        match child.try_wait() {
-            Ok(None) => {
-                let pid = child.id();
-                CHILDREN.lock().unwrap().insert(key, child);
-                std::thread::spawn(move || focus_window(pid));
-                return Ok(LaunchResult {
-                    used_flex_display: false,
-                    message: None,
-                });
-            }
-            _ => {}
+        if let Ok(None) = child.try_wait() {
+            let pid = child.id();
+            CHILDREN.lock().unwrap().insert(key, child);
+            std::thread::spawn(move || focus_window(pid));
+            return Ok(LaunchResult {
+                used_flex_display: false,
+                message: None,
+            });
         }
     }
 
@@ -1173,7 +1170,7 @@ fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResult, 
         } else {
             Some(settings.display_bounds.as_str())
         });
-    let supports_bounds = !display_bounds.is_none() && scrcpy_supports_display_bounds(&settings);
+    let supports_bounds = display_bounds.is_some() && scrcpy_supports_display_bounds(&settings);
 
     let mut args = vec![
         "-s".to_string(),
