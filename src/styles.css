@@ -447,6 +447,39 @@ code {
   color: #7bd4d0;
 }
 
+.field-hint {
+  display: block;
+  color: #aeb4bc;
+  font-size: 12px;
+  margin-top: -4px;
+}
+
+.per-device-bounds {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.per-device-bounds summary {
+  cursor: pointer;
+  color: #cdd3da;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.device-bounds-row {
+  margin-top: 10px;
+}
+
+.device-bounds-row span {
+  font-size: 13px;
+}
+
+.device-chip svg {
+  vertical-align: middle;
+}
+
 .primary-button {
   height: 44px;
   margin-top: auto;

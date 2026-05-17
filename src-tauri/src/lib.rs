@@ -70,6 +70,10 @@ struct Settings {
     adb_fallback: bool,
     #[serde(default = "default_kill_on_close")]
     kill_on_close: bool,
+    #[serde(default)]
+    display_bounds: String,
+    #[serde(default)]
+    device_display_bounds: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,6 +122,7 @@ struct Device {
     state: String,
     model: Option<String>,
     android_version: Option<String>,
+    battery_level: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -170,6 +175,8 @@ fn default_settings() -> Settings {
         web_enabled: default_web_enabled(),
         adb_fallback: default_adb_fallback(),
         kill_on_close: default_kill_on_close(),
+        display_bounds: "540x960".into(),
+        device_display_bounds: HashMap::new(),
     }
 }
 
@@ -457,6 +464,25 @@ fn scrcpy_supports_flex_display(settings: &Settings) -> bool {
             .map(|help| help.contains("--flex-display") || help.contains("-x, --flex-display"))
             .unwrap_or(false)
     })
+}
+
+fn scrcpy_supports_display_bounds(settings: &Settings) -> bool {
+    static CACHE: OnceLock<bool> = OnceLock::new();
+    *CACHE.get_or_init(|| {
+        run_command(&settings.scrcpy_path, &["--help"])
+            .map(|help| help.contains("--display-bounds"))
+            .unwrap_or(false)
+    })
+}
+
+fn parse_battery_level(output: &str) -> Option<u32> {
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("level: ") {
+            return rest.trim().parse::<u32>().ok();
+        }
+    }
+    None
 }
 
 // ── ADB icon extraction ─────────────────────────────────────────────────────
@@ -794,17 +820,21 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
                 state,
                 model: None,
                 android_version: None,
+                battery_level: None,
             });
             continue;
         }
         let model = adb_shell(settings, serial, &["getprop", "ro.product.model"]).ok();
         let android_version =
             adb_shell(settings, serial, &["getprop", "ro.build.version.release"]).ok();
+        let battery = adb_shell(settings, serial, &["dumpsys", "battery"]).ok();
+        let battery_level = battery.as_deref().and_then(parse_battery_level);
         devices.push(Device {
             serial: serial.into(),
             state,
             model: model.filter(|v| !v.is_empty()),
             android_version: android_version.filter(|v| !v.is_empty()),
+            battery_level,
         });
     }
     devices
@@ -1136,7 +1166,21 @@ fn launch_app(
     }
 
     let supports_flex = settings.flex_display && scrcpy_supports_flex_display(&settings);
-    eprintln!("launch_app: launching new scrcpy, flex={}", supports_flex);
+    let display_bounds = settings
+        .device_display_bounds
+        .get(&serial)
+        .map(String::as_str)
+        .or(if settings.display_bounds.is_empty() {
+            None
+        } else {
+            Some(settings.display_bounds.as_str())
+        });
+    let supports_bounds =
+        display_bounds.is_some() && scrcpy_supports_display_bounds(&settings);
+    eprintln!(
+        "launch_app: launching new scrcpy, flex={} bounds={:?}",
+        supports_flex, display_bounds
+    );
     let mut args = vec![
         "-s".to_string(),
         serial,
@@ -1151,6 +1195,13 @@ fn launch_app(
 
     if supports_flex {
         args.push("--flex-display".to_string());
+    }
+
+    if let Some(bounds) = display_bounds {
+        if supports_bounds {
+            args.push("--display-bounds".to_string());
+            args.push(bounds.to_string());
+        }
     }
 
     let child = Command::new(&settings.scrcpy_path)
@@ -1441,6 +1492,8 @@ mod tests {
         assert!(s.web_enabled);
         assert!(s.adb_fallback);
         assert!(s.kill_on_close);
+        assert_eq!(s.display_bounds, "540x960");
+        assert!(s.device_display_bounds.is_empty());
     }
 
     #[test]
@@ -1479,5 +1532,25 @@ mod tests {
     #[test]
     fn test_find_eocd_with_offset_empty() {
         assert!(find_eocd_with_offset(b"").is_none());
+    }
+
+    #[test]
+    fn test_parse_battery_level_simple() {
+        assert_eq!(parse_battery_level("  level: 85\n  status: 5\n"), Some(85));
+    }
+
+    #[test]
+    fn test_parse_battery_level_zero() {
+        assert_eq!(parse_battery_level("  level: 0\n"), Some(0));
+    }
+
+    #[test]
+    fn test_parse_battery_level_not_found() {
+        assert_eq!(parse_battery_level("  status: 5\n  health: 2\n"), None);
+    }
+
+    #[test]
+    fn test_parse_battery_level_empty() {
+        assert_eq!(parse_battery_level(""), None);
     }
 }

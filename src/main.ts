@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { createIcons, Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings, Smartphone, X } from "lucide";
+import { createIcons, Battery, BatteryFull, BatteryLow, BatteryMedium, Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings, Smartphone, X } from "lucide";
 import "./styles.css";
 
 type SettingsState = {
@@ -12,6 +12,8 @@ type SettingsState = {
   webEnabled: boolean;
   adbFallback: boolean;
   killOnClose: boolean;
+  displayBounds: string;
+  deviceDisplayBounds: Record<string, string>;
 };
 
 type BinaryStatus = {
@@ -31,6 +33,7 @@ type Device = {
   state: string;
   model?: string;
   androidVersion?: string;
+  batteryLevel?: number;
 };
 
 type AndroidApp = {
@@ -156,6 +159,13 @@ function renderStatusPill(binary: BinaryStatus, label: string): string {
   `;
 }
 
+function batteryIcon(level?: number): string {
+  if (level === undefined) return "";
+  if (level > 75) return `<i data-lucide="battery-full"></i>`;
+  if (level > 25) return `<i data-lucide="battery-medium"></i>`;
+  return `<i data-lucide="battery-low"></i>`;
+}
+
 function renderDeviceSelect(): string {
   if (state.loadingDevices) {
     return `<div class="device-chip muted"><i data-lucide="refresh-cw"></i><span>Finding devices</span></div>`;
@@ -171,7 +181,7 @@ function renderDeviceSelect(): string {
     const tooltip = device.androidVersion
       ? `${device.model || device.serial} · Android ${device.androidVersion} · ${device.serial}`
       : device.serial;
-    return `<div class="device-chip" title="${shellEscapeText(tooltip)}"><i data-lucide="smartphone"></i><span>${shellEscapeText(name)}</span></div>`;
+    return `<div class="device-chip" title="${shellEscapeText(tooltip)}"><i data-lucide="smartphone"></i><span>${shellEscapeText(name)} ${batteryIcon(device.batteryLevel)}${device.batteryLevel !== undefined ? ` ${device.batteryLevel}%` : ""}</span></div>`;
   }
 
   return `
@@ -180,7 +190,7 @@ function renderDeviceSelect(): string {
       <select id="deviceSelect" aria-label="Select Android device">
         ${state.devices
           .map((device) => {
-            const name = `${device.model || device.serial}${device.androidVersion ? ` · Android ${device.androidVersion}` : ""}`;
+            const name = `${device.model || device.serial}${device.androidVersion ? ` · Android ${device.androidVersion}` : ""}${device.batteryLevel !== undefined ? ` [${device.batteryLevel}%]` : ""}`;
             return `<option value="${shellEscapeText(device.serial)}" ${device.serial === state.selectedSerial ? "selected" : ""}>${shellEscapeText(name)}</option>`;
           })
           .join("")}
@@ -384,6 +394,28 @@ function renderSettings(): string {
         </label>
 
         <label class="field">
+          <span>Virtual display bounds</span>
+          <input id="displayBounds" value="${shellEscapeText(state.settings.displayBounds)}" placeholder="540x960" />
+          <small class="field-hint">Leave empty for phone's native resolution</small>
+        </label>
+
+        ${state.devices.filter(d => d.state === "device").length > 0 ? `
+          <details class="per-device-bounds">
+            <summary>Per-device overrides</summary>
+            ${state.devices.filter(d => d.state === "device").map(device => {
+              const name = device.model || device.serial;
+              const val = state.settings!.deviceDisplayBounds[device.serial] || "";
+              return `
+                <label class="field device-bounds-row">
+                  <span>${shellEscapeText(name)}</span>
+                  <input class="device-bounds-input" data-serial="${shellEscapeText(device.serial)}" value="${shellEscapeText(val)}" placeholder="Inherit global" />
+                </label>
+              `;
+            }).join("")}
+          </details>
+        ` : ""}
+
+        <label class="field">
           <span>Icon source</span>
           <select id="iconSource">
             <option value="none" ${state.settings.iconSource === "none" ? "selected" : ""}>Generated placeholders</option>
@@ -439,7 +471,7 @@ function render(): void {
     </main>
   `;
   try {
-    createIcons({ icons: { Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings, Smartphone, X } });
+    createIcons({ icons: { Battery, BatteryFull, BatteryLow, BatteryMedium, Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings, Smartphone, X } });
   } catch (error) {
     console.warn("Unable to render lucide icons", error);
   }
@@ -534,6 +566,14 @@ async function loadSettings(): Promise<void> {
 async function saveSettings(): Promise<void> {
   const current = state.settings;
   if (!current) return;
+  const deviceDisplayBounds: Record<string, string> = {};
+  document.querySelectorAll<HTMLInputElement>(".device-bounds-input").forEach((input) => {
+    const serial = input.dataset.serial;
+    if (serial) {
+      const val = input.value.trim();
+      if (val) deviceDisplayBounds[serial] = val;
+    }
+  });
   const next: SettingsState = {
     ...current,
     adbPath: document.querySelector<HTMLInputElement>("#adbPath")?.value.trim() || "adb",
@@ -542,6 +582,8 @@ async function saveSettings(): Promise<void> {
     iconSource: (document.querySelector<HTMLSelectElement>("#iconSource")?.value as "web" | "none") || "none",
     flexDisplay: Boolean(document.querySelector<HTMLInputElement>("#flexDisplay")?.checked),
     killOnClose: Boolean(document.querySelector<HTMLInputElement>("#killOnClose")?.checked),
+    displayBounds: document.querySelector<HTMLInputElement>("#displayBounds")?.value.trim() || "",
+    deviceDisplayBounds,
   };
   state.settings = await invoke<SettingsState>("save_settings", { settings: next });
   state.settingsOpen = false;
