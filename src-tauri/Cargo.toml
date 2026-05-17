@@ -1,0 +1,24 @@
+[package]
+name = "scrcpy-launcher"
+version = "0.1.0"
+description = "A lightweight scrcpy app launcher for Android devices"
+authors = ["scrcpy-launcher contributors"]
+license = "MIT"
+repository = ""
+edition = "2021"
+
+[lib]
+name = "scrcpy_launcher_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+base64 = "0.22"
+flate2 = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["custom-protocol"] }
+ureq = "3"
+scraper = "0.22"

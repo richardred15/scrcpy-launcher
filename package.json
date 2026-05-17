@@ -1,0 +1,27 @@
+{
+  "name": "scrcpy-launcher",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "tauri": "tauri",
+    "tauri:dev": "WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
+    "tauri:dev:x11": "GDK_BACKEND=x11 WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:linux": "tauri build --bundles deb --bundles rpm",
+    "tauri:build:windows": "tauri build --bundles msi --bundles nsis",
+    "tauri:build:macos": "tauri build --bundles dmg"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "lucide": "^0.468.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}

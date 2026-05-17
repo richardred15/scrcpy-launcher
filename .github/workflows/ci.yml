@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Install system dependencies (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Lint (clippy)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Run tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build (debug)
+        run: cargo build --manifest-path src-tauri/Cargo.toml
+
+  check-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        run: npm run build
+
+  build-linux:
+    needs: [check-rust, check-frontend]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build bundles
+        run: npm run tauri:build:linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundles
+          path: src-tauri/target/release/bundle/
+
+  build-windows:
+    needs: [check-rust, check-frontend]
+    if: github.event_name == 'release'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build bundles
+        run: npm run tauri:build:windows
+        env:
+          WEBKIT_DISABLE_COMPOSITING_MODE: 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-bundles
+          path: src-tauri/target/release/bundle/
