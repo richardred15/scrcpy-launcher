@@ -599,10 +599,7 @@ async function refreshAll(): Promise<void> {
   state.loadingApps = true;
   render();
   invoke("trigger_refresh");
-  // Events arrive from background worker:
-  //   tool-status-updated → update pills
-  //   devices-updated     → auto-select, beginLoadApps
-  //   apps-loaded         → render grid, loadCachedMetaAndResolve
+  if (state.selectedSerial) beginLoadApps(state.selectedSerial);
 }
 
 async function loadSettings(): Promise<void> {
