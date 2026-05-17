@@ -74,6 +74,8 @@ struct Settings {
     display_bounds: String,
     #[serde(default)]
     device_display_bounds: HashMap<String, String>,
+    #[serde(default)]
+    wireless_devices: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,6 +127,7 @@ struct Device {
     battery_level: Option<u32>,
     battery_temperature: Option<f32>,
     battery_charging: Option<bool>,
+    wireless: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -179,6 +182,7 @@ fn default_settings() -> Settings {
         kill_on_close: default_kill_on_close(),
         display_bounds: "540x960".into(),
         device_display_bounds: HashMap::new(),
+        wireless_devices: Vec::new(),
     }
 }
 
@@ -818,39 +822,46 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
     };
     let mut devices = Vec::new();
     for line in output.lines().skip(1) {
-        let mut parts = line.split_whitespace();
-        let Some(serial) = parts.next() else {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.is_empty() {
             continue;
-        };
-        let state = parts.next().unwrap_or("unknown").to_string();
+        }
+        let raw_serial = parts[0];
+        let state = parts.get(1).unwrap_or(&"unknown").to_string();
+        let wireless = raw_serial.starts_with('*')
+            || raw_serial.contains("tcpip:")
+            || raw_serial.contains("wireless:");
+        let serial = raw_serial.trim_start_matches('*').to_string();
         if state != "device" {
             devices.push(Device {
-                serial: serial.into(),
+                serial: serial.clone(),
                 state,
                 model: None,
                 android_version: None,
                 battery_level: None,
                 battery_temperature: None,
                 battery_charging: None,
+                wireless,
             });
             continue;
         }
-        let model = adb_shell(settings, serial, &["getprop", "ro.product.model"]).ok();
+        let model = adb_shell(settings, &serial, &["getprop", "ro.product.model"]).ok();
         let android_version =
-            adb_shell(settings, serial, &["getprop", "ro.build.version.release"]).ok();
-        let battery = adb_shell(settings, serial, &["dumpsys", "battery"]).ok();
+            adb_shell(settings, &serial, &["getprop", "ro.build.version.release"]).ok();
+        let battery = adb_shell(settings, &serial, &["dumpsys", "battery"]).ok();
         let (battery_level, battery_temperature, battery_charging) = battery
             .as_deref()
             .map(parse_battery_info)
             .unwrap_or_default();
         devices.push(Device {
-            serial: serial.into(),
+            serial: serial.clone(),
             state,
             model: model.filter(|v| !v.is_empty()),
             android_version: android_version.filter(|v| !v.is_empty()),
             battery_level,
             battery_temperature,
             battery_charging,
+            wireless,
         });
     }
     devices
@@ -1139,6 +1150,86 @@ fn focus_window(pid: u32) -> bool {
 }
 
 #[tauri::command]
+fn adb_connect(app: tauri::AppHandle, host_port: String) -> Result<String, String> {
+    let settings = read_settings(&app);
+    eprintln!("adb_connect: {}", host_port);
+    let output = Command::new(&settings.adb_path)
+        .args(["connect", &host_port])
+        .output()
+        .map_err(|e| format!("Failed to run adb: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if output.status.success() {
+        eprintln!("adb_connect: OK: {}", stdout);
+        Ok(stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("adb_connect: FAILED: {}", stderr);
+        Err(format!("ADB connect failed: {stderr}"))
+    }
+}
+
+#[tauri::command]
+fn adb_disconnect(app: tauri::AppHandle, host_port: String) -> Result<String, String> {
+    let settings = read_settings(&app);
+    eprintln!("adb_disconnect: {}", host_port);
+    let output = Command::new(&settings.adb_path)
+        .args(["disconnect", &host_port])
+        .output()
+        .map_err(|e| format!("Failed to run adb: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if output.status.success() {
+        eprintln!("adb_disconnect: OK: {}", stdout);
+        Ok(stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("adb_disconnect: FAILED: {}", stderr);
+        Err(format!("ADB disconnect failed: {stderr}"))
+    }
+}
+
+#[tauri::command]
+fn save_wireless_device(app: tauri::AppHandle, host_port: String) -> Result<String, String> {
+    let settings = read_settings(&app);
+    let mut wireless_devices = settings.wireless_devices.clone();
+    if !wireless_devices.contains(&host_port) {
+        wireless_devices.push(host_port.clone());
+    }
+    let mut new_settings = settings.clone();
+    new_settings.wireless_devices = wireless_devices;
+    let path = settings_path(&app).map_err(|e| format!("Cannot get settings path: {e}"))?;
+    let contents =
+        serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
+    fs::write(&path, contents)
+        .map_err(|e| format!("Write error: {e}"))?;
+    Ok(host_port)
+}
+
+#[tauri::command]
+fn remove_wireless_device(app: tauri::AppHandle, host_port: String) -> Result<String, String> {
+    let settings = read_settings(&app);
+    let wireless_devices: Vec<String> = settings
+        .wireless_devices
+        .clone()
+        .into_iter()
+        .filter(|d| d != &host_port)
+        .collect();
+    let mut new_settings = settings.clone();
+    new_settings.wireless_devices = wireless_devices;
+    let path = settings_path(&app).map_err(|e| format!("Cannot get settings path: {e}"))?;
+    let contents =
+        serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
+    fs::write(&path, contents)
+        .map_err(|e| format!("Write error: {e}"))?;
+    Ok(host_port)
+}
+
+#[tauri::command]
+fn get_wireless_devices(app: tauri::AppHandle) -> Vec<String> {
+    let settings = read_settings(&app);
+    settings.wireless_devices
+}
+
+#[tauri::command]
 fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResult, String> {
     let key = format!("__mirror__:{serial}");
     let settings = read_settings(&app);
@@ -1367,6 +1458,11 @@ pub fn run() {
             save_settings,
             launch_app,
             launch_mirror,
+            adb_connect,
+            adb_disconnect,
+            save_wireless_device,
+            remove_wireless_device,
+            get_wireless_devices,
             get_cached_app_meta,
             resolve_app_batch,
             prune_cache,
