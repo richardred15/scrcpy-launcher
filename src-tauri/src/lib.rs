@@ -274,13 +274,13 @@ fn download_icon_as_data_url(url: &str) -> Option<String> {
     }
     let engine = base64::engine::general_purpose::STANDARD;
     // Sniff MIME from first bytes; fallback to URL extension
-    let mime = if bytes.len() > 8 && &bytes[..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    let mime = if bytes.len() > 8 && bytes[..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
     {
         "image/png"
     } else if bytes.len() > 4
-        && &bytes[..4] == [0x52, 0x49, 0x46, 0x46]
+        && bytes[..4] == [0x52, 0x49, 0x46, 0x46]
         && bytes.len() > 12
-        && &bytes[8..12] == [0x57, 0x45, 0x42, 0x50]
+        && bytes[8..12] == [0x57, 0x45, 0x42, 0x50]
     {
         "image/webp"
     } else {
@@ -410,7 +410,7 @@ fn pretty_label(package_name: &str) -> String {
         .fold(String::with_capacity(tail.len() + 5), |mut s, c| {
             if c.is_uppercase()
                 && !s.is_empty()
-                && s.chars().last().map_or(false, |p| p.is_lowercase())
+                && s.chars().last().is_some_and(|p| p.is_lowercase())
             {
                 s.push(' ');
             }
@@ -860,7 +860,7 @@ fn compute_apps(settings: &Settings, serial: &str) -> Vec<AndroidApp> {
     }
 
     let mut app_list: Vec<_> = apps_map.into_values().collect();
-    app_list.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+    app_list.sort_by_key(|a| a.label.to_lowercase());
     app_list
 }
 
