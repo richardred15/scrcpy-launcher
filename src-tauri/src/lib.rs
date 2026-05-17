@@ -1175,8 +1175,7 @@ fn launch_app(
         } else {
             Some(settings.display_bounds.as_str())
         });
-    let supports_bounds =
-        display_bounds.is_some() && scrcpy_supports_display_bounds(&settings);
+    let supports_bounds = display_bounds.is_some() && scrcpy_supports_display_bounds(&settings);
     eprintln!(
         "launch_app: launching new scrcpy, flex={} bounds={:?}",
         supports_flex, display_bounds

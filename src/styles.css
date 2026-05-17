@@ -107,7 +107,6 @@ button {
 .panel-head p,
 .empty p,
 .package-name,
-.count,
 .pill small,
 .device-chip small {
   color: #aeb4bc;
@@ -124,8 +123,7 @@ button {
 .pill,
 .device-chip,
 .device-select,
-.search-box,
-.count {
+.search-box {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -204,9 +202,22 @@ svg {
 .control-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 6px 0;
+  transition: background 150ms ease;
+}
+
+.control-row.stuck {
+  background: rgba(16, 17, 19, 0.75);
+  backdrop-filter: blur(8px);
+}
+
+.control-row.stuck:focus-within {
+  background: #101113;
 }
 
 .search-box {
@@ -220,25 +231,6 @@ svg {
   height: 32px;
   font-size: 13px;
 }
-
-.count {
-  justify-content: center;
-  min-width: 70px;
-  padding: 0 8px;
-  font-size: 13px;
-}
-
-.icon-loading {
-  color: #7bd4d0;
-  font-size: 12px;
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
 .error-banner {
   margin-bottom: 16px;
   padding: 12px 14px;
@@ -392,6 +384,10 @@ svg {
   flex-direction: column;
   gap: 16px;
   padding-top: 16px;
+  padding-right: 8px;
+  padding-bottom: 10px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .panel-head {

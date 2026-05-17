@@ -179,13 +179,13 @@ function renderDeviceSelect(): string {
     const device = state.devices[0];
     const name = device.model || device.serial;
     const tooltip = device.androidVersion
-      ? `${device.model || device.serial} · Android ${device.androidVersion} · ${device.serial}`
-      : device.serial;
+      ? `${device.model || device.serial} · Android ${device.androidVersion} · ${device.serial} · ${state.apps.length} apps`
+      : `${device.serial} · ${state.apps.length} apps`;
     return `<div class="device-chip" title="${shellEscapeText(tooltip)}"><i data-lucide="smartphone"></i><span>${shellEscapeText(name)} ${batteryIcon(device.batteryLevel)}${device.batteryLevel !== undefined ? ` ${device.batteryLevel}%` : ""}</span></div>`;
   }
 
   return `
-    <label class="device-select">
+    <label class="device-select" title="${shellEscapeText(`${state.apps.length} apps`)}">
       <i data-lucide="smartphone"></i>
       <select id="deviceSelect" aria-label="Select Android device">
         ${state.devices
@@ -349,9 +349,32 @@ function updateAppGrid(): void {
 }
 
 function updateControlRow(): void {
-  const el = document.querySelector(".count");
-  if (el) {
-    el.innerHTML = `${state.apps.length} apps${state.resolveQueue.size ? ` <span class="icon-loading">resolving ${state.resolveQueue.size}…</span>` : ""}`;
+  const chip = document.querySelector<HTMLElement>(".device-chip:not(.muted):not(.warning)");
+  if (chip) {
+    const device = selectedDevice();
+    if (device) {
+      const base = device.androidVersion
+        ? `${device.model || device.serial} · Android ${device.androidVersion} · ${device.serial}`
+        : device.serial;
+      const queue = state.resolveQueue.size;
+      chip.title = `${base} · ${state.apps.length} apps${queue ? ` (resolving ${queue}…)` : ""}`;
+    }
+  }
+  const selectWrap = document.querySelector<HTMLElement>(".device-select");
+  if (selectWrap) {
+    const device = selectedDevice();
+    if (device) {
+      const queue = state.resolveQueue.size;
+      selectWrap.title = `${state.apps.length} apps${queue ? ` (resolving ${queue}…)` : ""}`;
+    }
+  }
+}
+
+function updateStickyState(): void {
+  const row = document.querySelector<HTMLElement>(".control-row");
+  const topbar = document.querySelector<HTMLElement>(".topbar");
+  if (row && topbar) {
+    row.classList.toggle("stuck", topbar.getBoundingClientRect().bottom <= 0);
   }
 }
 
@@ -462,7 +485,6 @@ function render(): void {
           <i data-lucide="search"></i>
           <input id="search" value="${shellEscapeText(state.query)}" placeholder="Search apps or packages" autocomplete="off" />
         </label>
-        <div class="count">${state.apps.length} apps${state.resolveQueue.size ? `<span class="icon-loading"> resolving ${state.resolveQueue.size}…</span>` : ""}</div>
       </section>
 
       ${state.error ? `<div class="error-banner">${shellEscapeText(state.error)}</div>` : ""}
@@ -476,6 +498,7 @@ function render(): void {
     console.warn("Unable to render lucide icons", error);
   }
   updateAppGrid();
+  updateStickyState();
 }
 
 function setupEventDelegation(): void {
@@ -664,6 +687,8 @@ async function init(): Promise<void> {
     render();
     await loadSettings();
     render();
+
+    window.addEventListener("scroll", updateStickyState, { passive: true });
 
     // Background worker events — no sync ADB calls on main thread ever
     await listen<ToolStatus>("tool-status-updated", (event) => {
