@@ -106,6 +106,7 @@ const state = {
     wirelessHostPort: "",
     wirelessConnecting: false,
     wirelessDevices: [] as string[],
+    openApps: new Set<string>(),
     launchingPackage: "",
     launchMessages: new Map<string, { kind: "info" | "error"; text: string }>(),
 };
@@ -114,12 +115,12 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 
 window.addEventListener("error", (event) => {
     state.error = event.message || "A frontend error occurred.";
-    render();
+    updateErrorBanner();
 });
 
 window.addEventListener("unhandledrejection", (event) => {
     state.error = String(event.reason || "An async frontend error occurred.");
-    render();
+    updateErrorBanner();
 });
 
 function iconSeed(packageName: string): string {
@@ -288,6 +289,10 @@ function createAppCardElement(item: AndroidApp): HTMLButtonElement {
     btn.dataset.package = item.packageName;
     btn.dataset.launch = item.packageName;
 
+    if (state.openApps.has(item.packageName)) {
+        btn.classList.add("open");
+    }
+
     const message = state.launchMessages.get(item.packageName);
     if (message) {
         btn.classList.add("has-message", message.kind);
@@ -307,6 +312,9 @@ function createAppCardElement(item: AndroidApp): HTMLButtonElement {
 
 function updateCardElement(card: HTMLElement, item: AndroidApp): void {
     card.className = "app-card";
+    if (state.openApps.has(item.packageName)) {
+        card.classList.add("open");
+    }
 
     const message = state.launchMessages.get(item.packageName);
     if (message) {
@@ -347,6 +355,20 @@ function updateCardElement(card: HTMLElement, item: AndroidApp): void {
         const currentSrc = card.querySelector(".app-icon")?.getAttribute("src");
         if (currentSrc !== item.iconUrl) {
             iconArea.outerHTML = renderAppIcon(item);
+        }
+    }
+}
+
+function updateOpenStatus(): void {
+    const cards = document.querySelectorAll<HTMLElement>(".app-card");
+    for (const card of cards) {
+        const pkg = card.dataset.package;
+        if (pkg) {
+            if (state.openApps.has(pkg)) {
+                card.classList.add("open");
+            } else {
+                card.classList.remove("open");
+            }
         }
     }
 }
@@ -576,8 +598,64 @@ function renderSettings(): string {
   `;
 }
 
-function render(): void {
+function renderIcons() {
+    try {
+        createIcons({
+            icons: {
+                Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium,
+                Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings,
+                Smartphone, Wifi, X,
+            },
+        });
+    } catch (error) {
+        console.warn("Unable to render lucide icons", error);
+    }
+}
+
+function updateShellDeviceSerial(): void {
+    const el = document.getElementById("shell-device-serial");
+    if (!el) return;
     const device = selectedDevice();
+    el.textContent = device ? device.serial : "Android apps as desktop windows";
+}
+
+function updateTopBar(): void {
+    const container = document.getElementById("top-actions");
+    if (!container) return;
+    container.innerHTML = `
+        ${state.tools ? renderStatusPill(state.tools.adb, "ADB") + renderStatusPill(state.tools.scrcpy, "scrcpy") : ""}
+        ${renderDeviceSelect()}
+        ${renderBatteryPill()}
+        ${renderTempPill()}
+        <button class="icon-button" id="wirelessConnect" title="Connect wireless ADB device"><i data-lucide="wifi"></i></button>
+        <button class="icon-button" id="reload" title="Rescan apps and devices"><i data-lucide="refresh-cw"></i></button>
+        <button class="icon-button" id="settings" title="Settings"><i data-lucide="settings"></i></button>
+    `;
+    renderIcons();
+    updateControlRow();
+}
+
+function updateWirelessForm(): void {
+    const container = document.getElementById("wireless-container");
+    if (!container) return;
+    container.innerHTML = state.wirelessConnectOpen ? renderWirelessForm() : "";
+    renderIcons();
+}
+
+function updateErrorBanner(): void {
+    const container = document.getElementById("error-container");
+    if (!container) return;
+    container.innerHTML = state.error ? `<div class="error-banner">${shellEscapeText(state.error)}</div>` : "";
+}
+
+function updateSettings(): void {
+    const container = document.getElementById("settings-container");
+    if (!container) return;
+    container.innerHTML = renderSettings();
+    renderIcons();
+}
+
+function initShell(): void {
     app.innerHTML = `
     <main class="shell">
       <header class="topbar">
@@ -585,21 +663,13 @@ function render(): void {
           <div class="brand-mark"><img src="/app-icon.png" class="brand-icon" alt="" /></div>
           <div>
             <h1>scrcpy Launcher</h1>
-            <p>${device ? shellEscapeText(device.serial) : "Android apps as desktop windows"}</p>
+            <p id="shell-device-serial">Android apps as desktop windows</p>
           </div>
         </div>
-        <div class="top-actions">
-          ${state.tools ? renderStatusPill(state.tools.adb, "ADB") + renderStatusPill(state.tools.scrcpy, "scrcpy") : ""}
-          ${renderDeviceSelect()}
-          ${renderBatteryPill()}
-          ${renderTempPill()}
-          <button class="icon-button" id="wirelessConnect" title="Connect wireless ADB device"><i data-lucide="wifi"></i></button>
-          <button class="icon-button" id="reload" title="Rescan apps and devices"><i data-lucide="refresh-cw"></i></button>
-          <button class="icon-button" id="settings" title="Settings"><i data-lucide="settings"></i></button>
-        </div>
+        <div class="top-actions" id="top-actions"></div>
       </header>
 
-      ${state.wirelessConnectOpen ? renderWirelessForm() : ""}
+      <div id="wireless-container"></div>
 
       <section class="control-row">
         <label class="search-box">
@@ -608,33 +678,17 @@ function render(): void {
         </label>
       </section>
 
-      ${state.error ? `<div class="error-banner">${shellEscapeText(state.error)}</div>` : ""}
+      <div id="error-container"></div>
       <section id="appGrid" class="app-grid"></section>
-      ${renderSettings()}
+      <div id="settings-container"></div>
     </main>
   `;
-    try {
-        createIcons({
-            icons: {
-                Battery,
-                BatteryCharging,
-                BatteryFull,
-                BatteryLow,
-                BatteryMedium,
-                Cable,
-                MonitorSmartphone,
-                Play,
-                RefreshCw,
-                Search,
-                Settings,
-                Smartphone,
-                Wifi,
-                X,
-            },
-        });
-    } catch (error) {
-        console.warn("Unable to render lucide icons", error);
-    }
+    renderIcons();
+    updateShellDeviceSerial();
+    updateTopBar();
+    updateWirelessForm();
+    updateErrorBanner();
+    updateSettings();
     updateAppGrid();
     updateStickyState();
 }
@@ -645,7 +699,7 @@ function setupEventDelegation(): void {
 
         if (target.closest("#settings")) {
             state.settingsOpen = true;
-            render();
+            updateSettings();
             return;
         }
 
@@ -658,7 +712,7 @@ function setupEventDelegation(): void {
             state.wirelessConnectOpen = !state.wirelessConnectOpen;
             state.wirelessHostPort = "";
             state.wirelessConnecting = false;
-            render();
+            updateWirelessForm();
             if (state.wirelessConnectOpen) {
                 setTimeout(
                     () => document.getElementById("wirelessHostPort")?.focus(),
@@ -670,7 +724,7 @@ function setupEventDelegation(): void {
 
         if (target.closest("#closeWirelessForm")) {
             state.wirelessConnectOpen = false;
-            render();
+            updateWirelessForm();
             return;
         }
 
@@ -784,7 +838,8 @@ async function doWirelessConnect(): Promise<void> {
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
         state.error = "Invalid format. Use host:port (e.g., 192.168.1.100:5555)";
         state.wirelessConnecting = false;
-        render();
+        updateWirelessForm();
+        updateErrorBanner();
         return;
     }
     const [host, port] = parts;
@@ -792,12 +847,14 @@ async function doWirelessConnect(): Promise<void> {
     if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
         state.error = "Port must be a number between 1 and 65535";
         state.wirelessConnecting = false;
-        render();
+        updateWirelessForm();
+        updateErrorBanner();
         return;
     }
     state.wirelessConnecting = true;
     state.error = "";
-    render();
+    updateWirelessForm();
+    updateErrorBanner();
     try {
         const result = await invoke<string>("adb_connect", { hostPort });
         console.log("adb_connect:", result);
@@ -814,33 +871,39 @@ async function doWirelessConnect(): Promise<void> {
         } else {
             state.error = result;
             state.wirelessConnecting = false;
-            render();
+            updateWirelessForm();
+            updateErrorBanner();
         }
     } catch (e: any) {
         state.error = String(e);
         state.wirelessConnecting = false;
-        render();
+        updateWirelessForm();
+        updateErrorBanner();
     }
 }
 
 async function doWirelessDisconnect(hostPort: string): Promise<void> {
     state.error = "";
-    render();
+    updateTopBar();
+    updateErrorBanner();
     try {
         await invoke("adb_disconnect", { hostPort });
         await invoke("remove_wireless_device", { hostPort });
         state.wirelessDevices = state.wirelessDevices.filter((d) => d !== hostPort);
-        render();
+        updateTopBar();
+        updateSettings();
+        updateErrorBanner();
     } catch (e: any) {
         state.error = String(e);
-        render();
+        updateErrorBanner();
     }
 }
 
 async function doWirelessReconnect(hostPort: string): Promise<void> {
     state.error = "";
     state.wirelessConnecting = true;
-    render();
+    updateWirelessForm();
+    updateErrorBanner();
     try {
         const result = await invoke<string>("adb_connect", { hostPort });
         if (
@@ -852,33 +915,38 @@ async function doWirelessReconnect(hostPort: string): Promise<void> {
         } else {
             state.error = result;
             state.wirelessConnecting = false;
-            render();
+            updateWirelessForm();
+            updateErrorBanner();
         }
     } catch (e: any) {
         state.error = String(e);
         state.wirelessConnecting = false;
-        render();
+        updateWirelessForm();
+        updateErrorBanner();
     }
 }
 
 async function loadWirelessDevices(): Promise<void> {
     try {
         state.wirelessDevices = await invoke<string[]>("get_wireless_devices");
+        updateSettings();
     } catch {
         state.wirelessDevices = [];
+        updateSettings();
     }
 }
 
 async function closeSettings(): Promise<void> {
     state.settingsOpen = false;
-    render();
+    updateSettings();
 }
 
 async function refreshAll(): Promise<void> {
     state.error = "";
     state.loadingDevices = true;
     state.loadingApps = true;
-    render();
+    updateTopBar();
+    updateErrorBanner();
     invoke("trigger_refresh");
     if (state.selectedSerial) beginLoadApps(state.selectedSerial);
     loadWirelessDevices();
@@ -935,7 +1003,8 @@ async function saveSettings(): Promise<void> {
         settings: next,
     });
     state.settingsOpen = false;
-    render();
+    updateSettings();
+    updateTopBar();
     invoke("trigger_refresh");
 }
 
@@ -999,7 +1068,7 @@ async function launchMirror(serial: string): Promise<void> {
         await invoke("launch_mirror", { serial });
     } catch (error) {
         state.error = String(error);
-        render();
+        updateErrorBanner();
     }
 }
 
@@ -1008,6 +1077,8 @@ async function launch(item: AndroidApp): Promise<void> {
     state.error = "";
     state.launchMessages.delete(item.packageName);
     updateAppGrid();
+    state.openApps.add(item.packageName);
+    updateOpenStatus();
     try {
         const result = await invoke<LaunchResult>("launch_app", {
             serial: state.selectedSerial,
@@ -1025,6 +1096,8 @@ async function launch(item: AndroidApp): Promise<void> {
             kind: "error",
             text: String(error),
         });
+        state.openApps.delete(item.packageName);
+        updateOpenStatus();
     } finally {
         state.launchingPackage = "";
         updateAppGrid();
@@ -1034,16 +1107,25 @@ async function launch(item: AndroidApp): Promise<void> {
 async function init(): Promise<void> {
     try {
         setupEventDelegation();
-        render();
+        initShell();
         await loadSettings();
-        render();
+        updateSettings();
+
+        const openApps = await invoke<string[]>("get_open_apps");
+        state.openApps = new Set(openApps);
+        updateAppGrid();
 
         window.addEventListener("scroll", updateStickyState, { passive: true });
 
         // Background worker events — no sync ADB calls on main thread ever
         await listen<ToolStatus>("tool-status-updated", (event) => {
             state.tools = event.payload;
-            render();
+            updateTopBar();
+        });
+
+        await listen<string[]>("open-apps-updated", (event) => {
+            state.openApps = new Set(event.payload);
+            updateOpenStatus();
         });
 
         await listen<Device[]>("devices-updated", (event) => {
@@ -1062,7 +1144,8 @@ async function init(): Promise<void> {
                 state.selectedSerial = ready[0]?.serial || "";
             }
 
-            render();
+            updateTopBar();
+            updateShellDeviceSerial();
 
             const selectedChanged = previousSerial !== state.selectedSerial;
             const devicesChanged = previousKey !== nextKey;
@@ -1109,7 +1192,7 @@ async function init(): Promise<void> {
         invoke("trigger_refresh");
     } catch (error) {
         state.error = String(error);
-        render();
+        updateErrorBanner();
     }
 }
 

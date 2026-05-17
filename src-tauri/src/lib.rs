@@ -925,6 +925,29 @@ fn compute_apps(settings: &Settings, serial: &str) -> Vec<AndroidApp> {
 
 struct RefreshFlag(Arc<AtomicBool>);
 
+fn get_open_apps_list() -> Vec<String> {
+    let mut open_apps = Vec::new();
+    if let Ok(mut children) = CHILDREN.lock() {
+        children.retain(|key, child| {
+            match child.try_wait() {
+                Ok(None) => {
+                    if !key.starts_with("__mirror__") {
+                        open_apps.push(key.clone());
+                    }
+                    true
+                }
+                _ => false,
+            }
+        });
+    }
+    open_apps
+}
+
+#[tauri::command]
+fn get_open_apps() -> Vec<String> {
+    get_open_apps_list()
+}
+
 fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Arc<AtomicBool>) {
     loop {
         if exit.load(Ordering::Relaxed) {
@@ -938,6 +961,9 @@ fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Arc<At
 
         let devices = compute_devices(&settings);
         let _ = app_handle.emit("devices-updated", &devices);
+
+        let open_apps = get_open_apps_list();
+        let _ = app_handle.emit("open-apps-updated", &open_apps);
 
         // Sleep 10 s with early wake on refresh signal or exit
         for _ in 0..100 {
@@ -1460,6 +1486,7 @@ pub fn run() {
             launch_mirror,
             adb_connect,
             adb_disconnect,
+            get_open_apps,
             save_wireless_device,
             remove_wireless_device,
             get_wireless_devices,
