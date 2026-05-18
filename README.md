@@ -1,5 +1,12 @@
 # scrcpy Launcher
 
+[![GitHub release](https://img.shields.io/github/v/release/richardred15/scrcpy-launcher)](https://github.com/richardred15/scrcpy-launcher/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/richardred15/scrcpy-launcher/ci.yml?logo=github)](https://github.com/richardred15/scrcpy-launcher/actions)
+[![License](https://img.shields.io/github/license/richardred15/scrcpy-launcher)](https://github.com/richardred15/scrcpy-launcher/blob/main/LICENSE)
+[![Tauri](https://img.shields.io/badge/Tauri-2-ffc131?logo=tauri)](https://v2.tauri.app)
+[![Rust](https://img.shields.io/badge/Rust-1.85+-f46623?logo=rust)](https://www.rust-lang.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org)
+
 Launch Android apps as separate desktop windows via scrcpy virtual displays. Built with Tauri 2 + Rust + vanilla TypeScript.
 
 ## Features

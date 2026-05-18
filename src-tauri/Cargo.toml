@@ -25,3 +25,8 @@ scraper = "0.22"
 uuid = { version = "1", features = ["v4"] }
 quick-xml = "0.37"
 image = { version = "0.25", default-features = false, features = ["png", "webp"] }
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
