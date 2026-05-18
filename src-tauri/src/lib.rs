@@ -1301,106 +1301,151 @@ fn resolve_app_batch(
     pkgs: Vec<String>,
 ) -> Result<(), String> {
     let settings = read_settings(&app_handle);
-    let mut cache = read_metadata_cache(&app_handle);
+    let cache = Arc::new(Mutex::new(read_metadata_cache(&app_handle)));
+
+    if pkgs.is_empty() {
+        return Ok(());
+    }
 
     std::thread::spawn(move || {
-        let mut google_last = Instant::now() - Duration::from_secs(3);
-        let mut fdroid_last = Instant::now() - Duration::from_secs(3);
+        const MAX_CONCURRENT: usize = 4;
+        let num_workers = std::cmp::min(MAX_CONCURRENT, pkgs.len());
+        let mut handles = Vec::with_capacity(num_workers);
 
-        for pkg in &pkgs {
-            if let Some(meta) = cache.get(pkg) {
-                let _ = app_handle.emit(
-                    "app-meta-resolved",
-                    AppMetaResolvedEvent {
-                        package_name: pkg.clone(),
-                        label: meta.label.clone(),
-                        icon_url: meta.icon_data_url.clone(),
-                    },
-                );
-                continue;
-            }
+        for worker_id in 0..num_workers {
+            let cache = Arc::clone(&cache);
+            let app_handle = app_handle.clone();
+            let settings = settings.clone();
+            let serial = serial.clone();
+            let pkgs = pkgs.clone();
 
-            eprintln!("[scrcpy-launcher] resolve: {pkg}");
+            handles.push(std::thread::spawn(move || {
+                let mut google_last = Instant::now() - Duration::from_secs(3);
+                let mut fdroid_last = Instant::now() - Duration::from_secs(3);
+                let delay = Duration::from_millis(300);
 
-            if settings.web_enabled {
-                rate_limit(&mut google_last, Duration::from_secs(2));
-                if let Some((label, icon_url)) = scrape_google_play(pkg) {
-                    let icon_data_url = download_icon_as_data_url(&icon_url);
-                    let meta = CachedAppMeta {
-                        label: label.clone(),
-                        icon_data_url: icon_data_url.clone(),
-                        source: "google_play".into(),
-                        resolved_at: std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs(),
-                    };
-                    cache.insert(pkg.clone(), meta);
-                    write_metadata_cache(&app_handle, &cache);
-                    let _ = app_handle.emit(
-                        "app-meta-resolved",
-                        AppMetaResolvedEvent {
-                            package_name: pkg.clone(),
-                            label,
-                            icon_url: icon_data_url,
-                        },
+                let mut idx = worker_id;
+                while idx < pkgs.len() {
+                    let pkg = &pkgs[idx];
+
+                    {
+                        let cache_lock = cache.lock().unwrap();
+                        if let Some(meta) = cache_lock.get(pkg) {
+                            let _ = app_handle.emit(
+                                "app-meta-resolved",
+                                AppMetaResolvedEvent {
+                                    package_name: pkg.clone(),
+                                    label: meta.label.clone(),
+                                    icon_url: meta.icon_data_url.clone(),
+                                },
+                            );
+                            idx += num_workers;
+                            continue;
+                        }
+                    }
+
+                    eprintln!(
+                        "[scrcpy-launcher] resolve: {pkg} (worker {worker_id}/{num_workers})"
                     );
-                    continue;
-                }
-            }
+                    let mut resolved = false;
 
-            if settings.web_enabled {
-                rate_limit(&mut fdroid_last, Duration::from_secs(2));
-                if let Some((label, icon_url)) = scrape_fdroid(pkg) {
-                    let icon_data_url = download_icon_as_data_url(&icon_url);
-                    let meta = CachedAppMeta {
-                        label: label.clone(),
-                        icon_data_url: icon_data_url.clone(),
-                        source: "fdroid".into(),
-                        resolved_at: std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs(),
-                    };
-                    cache.insert(pkg.clone(), meta);
-                    write_metadata_cache(&app_handle, &cache);
-                    let _ = app_handle.emit(
-                        "app-meta-resolved",
-                        AppMetaResolvedEvent {
-                            package_name: pkg.clone(),
-                            label,
-                            icon_url: icon_data_url,
-                        },
-                    );
-                    continue;
-                }
-            }
+                    if settings.web_enabled {
+                        rate_limit(&mut google_last, delay);
+                        if let Some((label, icon_url)) = scrape_google_play(pkg) {
+                            let icon_data_url = download_icon_as_data_url(&icon_url);
+                            let meta = CachedAppMeta {
+                                label: label.clone(),
+                                icon_data_url: icon_data_url.clone(),
+                                source: "google_play".into(),
+                                resolved_at: std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                            };
+                            {
+                                let mut cache_lock = cache.lock().unwrap();
+                                cache_lock.insert(pkg.clone(), meta);
+                            }
+                            let _ = app_handle.emit(
+                                "app-meta-resolved",
+                                AppMetaResolvedEvent {
+                                    package_name: pkg.clone(),
+                                    label,
+                                    icon_url: icon_data_url,
+                                },
+                            );
+                            resolved = true;
+                        }
+                    }
 
-            if settings.adb_fallback {
-                let icon = extract_icon_adb(&settings, &serial, pkg);
-                let label = pretty_label(pkg);
-                let meta = CachedAppMeta {
-                    label: label.clone(),
-                    icon_data_url: icon.clone(),
-                    source: "adb".into(),
-                    resolved_at: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                };
-                cache.insert(pkg.clone(), meta);
-                write_metadata_cache(&app_handle, &cache);
-                let _ = app_handle.emit(
-                    "app-meta-resolved",
-                    AppMetaResolvedEvent {
-                        package_name: pkg.clone(),
-                        label,
-                        icon_url: icon,
-                    },
-                );
+                    if !resolved && settings.web_enabled {
+                        rate_limit(&mut fdroid_last, delay);
+                        if let Some((label, icon_url)) = scrape_fdroid(pkg) {
+                            let icon_data_url = download_icon_as_data_url(&icon_url);
+                            let meta = CachedAppMeta {
+                                label: label.clone(),
+                                icon_data_url: icon_data_url.clone(),
+                                source: "fdroid".into(),
+                                resolved_at: std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                            };
+                            {
+                                let mut cache_lock = cache.lock().unwrap();
+                                cache_lock.insert(pkg.clone(), meta);
+                            }
+                            let _ = app_handle.emit(
+                                "app-meta-resolved",
+                                AppMetaResolvedEvent {
+                                    package_name: pkg.clone(),
+                                    label,
+                                    icon_url: icon_data_url,
+                                },
+                            );
+                            resolved = true;
+                        }
+                    }
+
+                    if !resolved && settings.adb_fallback {
+                        let icon = extract_icon_adb(&settings, &serial, pkg);
+                        let label = pretty_label(pkg);
+                        let meta = CachedAppMeta {
+                            label: label.clone(),
+                            icon_data_url: icon.clone(),
+                            source: "adb".into(),
+                            resolved_at: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs(),
+                        };
+                        {
+                            let mut cache_lock = cache.lock().unwrap();
+                            cache_lock.insert(pkg.clone(), meta);
+                        }
+                        let _ = app_handle.emit(
+                            "app-meta-resolved",
+                            AppMetaResolvedEvent {
+                                package_name: pkg.clone(),
+                                label,
+                                icon_url: icon,
+                            },
+                        );
+                    }
+
+                    idx += num_workers;
+                }
+            }));
+        }
+
+        for handle in handles {
+            if let Err(e) = handle.join() {
+                eprintln!("[scrcpy-launcher] resolve worker panicked: {e:?}");
             }
         }
 
+        let final_cache = cache.lock().unwrap().clone();
+        write_metadata_cache(&app_handle, &final_cache);
         let _ = app_handle.emit("app-meta-batch-complete", ());
     });
 
