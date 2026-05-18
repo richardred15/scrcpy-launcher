@@ -481,8 +481,7 @@ pub fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResu
         } else {
             Some(settings.display_bounds.as_str())
         });
-    let supports_bounds =
-        display_bounds.is_some() && scrcpy_supports_display_bounds(&settings);
+    let supports_bounds = display_bounds.is_some() && scrcpy_supports_display_bounds(&settings);
 
     let mut args = vec![
         "-s".to_string(),
@@ -570,11 +569,7 @@ pub fn launch_app(
         .and_then(|meta| meta.icon_data_url.as_ref())
         .and_then(|url| save_app_icon(&package_name, url));
 
-    app_desktop_write(
-        &app_id,
-        &label,
-        icon_path.as_deref().unwrap_or("scrcpy"),
-    );
+    app_desktop_write(&app_id, &label, icon_path.as_deref().unwrap_or("scrcpy"));
 
     if let Ok(mut ids) = ACTIVE_APP_IDS.lock() {
         ids.insert(app_id.clone());
@@ -590,8 +585,7 @@ pub fn launch_app(
         } else {
             Some(settings.display_bounds.as_str())
         });
-    let supports_bounds =
-        display_bounds.is_some() && scrcpy_supports_display_bounds(&settings);
+    let supports_bounds = display_bounds.is_some() && scrcpy_supports_display_bounds(&settings);
     eprintln!(
         "launch_app: launching new scrcpy, flex={} bounds={:?}",
         supports_flex, display_bounds

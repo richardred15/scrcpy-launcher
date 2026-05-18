@@ -46,8 +46,7 @@ pub fn run() {
 
     let exit_flag = Arc::new(AtomicBool::new(false));
     let worker_exit = exit_flag.clone();
-    let worker_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>> =
-        Arc::new(Mutex::new(None));
+    let worker_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>> = Arc::new(Mutex::new(None));
     let setup_handle = worker_handle.clone();
 
     let app = tauri::Builder::default()

@@ -84,7 +84,7 @@ pub fn read_metadata_cache(app: &tauri::AppHandle) -> HashMap<String, CachedAppM
 pub fn write_metadata_cache(app: &tauri::AppHandle, cache: &HashMap<String, CachedAppMeta>) {
     if let Ok(path) = cache_path(app) {
         if let Ok(contents) = serde_json::to_string_pretty(cache) {
-    let _ = fs::write(path, contents);
+            let _ = fs::write(path, contents);
         }
     }
 }

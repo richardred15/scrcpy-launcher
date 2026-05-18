@@ -211,8 +211,7 @@ mod tests {
 
     #[test]
     fn test_parse_battery_info_full() {
-        let (lvl, temp, chg) =
-            parse_battery_info("  level: 85\n  temperature: 350\n  status: 2\n");
+        let (lvl, temp, chg) = parse_battery_info("  level: 85\n  temperature: 350\n  status: 2\n");
         assert_eq!(lvl, Some(85));
         assert_eq!(temp, Some(35.0));
         assert_eq!(chg, Some(true));
@@ -220,8 +219,7 @@ mod tests {
 
     #[test]
     fn test_parse_battery_info_discharging() {
-        let (lvl, temp, chg) =
-            parse_battery_info("  level: 42\n  temperature: 310\n  status: 3\n");
+        let (lvl, temp, chg) = parse_battery_info("  level: 42\n  temperature: 310\n  status: 3\n");
         assert_eq!(lvl, Some(42));
         assert_eq!(temp, Some(31.0));
         assert_eq!(chg, Some(false));

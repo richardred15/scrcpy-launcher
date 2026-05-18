@@ -5,11 +5,7 @@ use base64::Engine;
 use crate::adb::adb_shell;
 use crate::types::{ParsedIconEntry, Settings};
 
-pub fn extract_icon_adb(
-    settings: &Settings,
-    serial: &str,
-    package_name: &str,
-) -> Option<String> {
+pub fn extract_icon_adb(settings: &Settings, serial: &str, package_name: &str) -> Option<String> {
     eprintln!("[scrcpy-launcher] icon: extracting for {package_name}");
 
     let output = adb_shell(settings, serial, &["pm", "path", package_name]).ok()?;
@@ -236,8 +232,7 @@ fn find_best_icon_entry(cd_data: &[u8]) -> Option<ParsedIconEntry> {
             cd_data[pos + 42..pos + 46].try_into().ok()?,
         ));
         if pos + 46 + name_len <= cd_data.len() {
-            let filename =
-                std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
+            let filename = std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
             if is_icon_filename(filename) {
                 let score = icon_score(filename);
                 if score > best_score {
@@ -309,12 +304,9 @@ fn find_adaptive_icon_xml(cd_data: &[u8]) -> Option<ParsedIconEntry> {
             cd_data[pos + 42..pos + 46].try_into().ok()?,
         ));
         if pos + 46 + name_len <= cd_data.len() {
-            let filename =
-                std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
+            let filename = std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
             let lower = filename.to_lowercase();
-            if lower.contains("anydpi")
-                && lower.contains("ic_launcher")
-                && lower.ends_with(".xml")
+            if lower.contains("anydpi") && lower.contains("ic_launcher") && lower.ends_with(".xml")
             {
                 let data_start = local_offset + 30 + name_len as u64 + extra_len as u64;
                 xml_entry = Some(ParsedIconEntry {
@@ -406,11 +398,9 @@ fn find_drawable_entry(cd_data: &[u8], drawable_name: &str) -> Option<ParsedIcon
             cd_data[pos + 42..pos + 46].try_into().ok()?,
         ));
         if pos + 46 + name_len <= cd_data.len() {
-            let filename =
-                std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
+            let filename = std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
             let lower = filename.to_lowercase();
-            if lower.contains(&lower_name)
-                && (lower.ends_with(".png") || lower.ends_with(".webp"))
+            if lower.contains(&lower_name) && (lower.ends_with(".png") || lower.ends_with(".webp"))
             {
                 let data_start = local_offset + 30 + name_len as u64 + extra_len as u64;
                 let entry = ParsedIconEntry {

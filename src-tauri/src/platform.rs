@@ -149,22 +149,20 @@ impl Drop for TerminalGuard {
 
 pub fn register_desktop_file() {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let data_dir = std::env::var("XDG_DATA_HOME")
-        .unwrap_or_else(|_| format!("{home}/.local/share"));
+    let data_dir =
+        std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| format!("{home}/.local/share"));
     let apps_dir = PathBuf::from(&data_dir).join("applications");
     let icons_base = PathBuf::from(&data_dir).join("icons").join("hicolor");
 
     let exe = std::env::current_exe().ok();
-    let exe_path = exe
-        .as_ref()
-        .and_then(|p| {
-            let s = p.to_string_lossy();
-            if s.starts_with("/") {
-                Some(s.to_string())
-            } else {
-                None
-            }
-        });
+    let exe_path = exe.as_ref().and_then(|p| {
+        let s = p.to_string_lossy();
+        if s.starts_with("/") {
+            Some(s.to_string())
+        } else {
+            None
+        }
+    });
     let exe_path = match exe_path {
         Some(p) => p,
         None => return,

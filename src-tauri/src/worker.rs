@@ -11,11 +11,7 @@ use crate::types::{AndroidApp, AppsLoadedEvent, BinaryStatus, Device, Settings, 
 
 pub struct RefreshFlag(pub Arc<AtomicBool>);
 
-pub fn worker_loop(
-    app_handle: tauri::AppHandle,
-    flag: Arc<AtomicBool>,
-    exit: Arc<AtomicBool>,
-) {
+pub fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Arc<AtomicBool>) {
     loop {
         if exit.load(Ordering::Relaxed) {
             return;
@@ -194,7 +190,6 @@ pub fn trigger_load_apps(app_handle: tauri::AppHandle, serial: String) {
     std::thread::spawn(move || {
         let settings = read_settings_from_file();
         let apps = compute_apps(&settings, &serial);
-        let _ =
-            app_handle.emit("apps-loaded", AppsLoadedEvent { serial, apps });
+        let _ = app_handle.emit("apps-loaded", AppsLoadedEvent { serial, apps });
     });
 }
