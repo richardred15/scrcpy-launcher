@@ -315,8 +315,14 @@ svg {
 }
 
 .app-icon-wrap,
-.app-icon,
 .app-icon-fallback {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+}
+
+.app-icon {
   width: 64px;
   height: 64px;
   border-radius: 14px;
@@ -334,6 +340,24 @@ svg {
   font-size: 20px;
   font-weight: 800;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.notification-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 2;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: #ff4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 .app-name {

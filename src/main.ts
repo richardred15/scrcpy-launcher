@@ -121,6 +121,7 @@ const state = {
     launchingPackage: "",
     launchMessages: new Map<string, { kind: "info" | "error"; text: string }>(),
     contextMenu: null as { x: number; y: number; pkg: string } | null,
+    notificationCounts: {} as Record<string, number>,
 };
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -319,6 +320,41 @@ function renderAppIcon(item: AndroidApp): string {
       <img class="app-icon" src="${shellEscapeText(item.iconUrl)}" alt="" loading="lazy" />
     </div>
   `;
+}
+
+async function fetchNotificationCounts(): Promise<void> {
+    if (!state.selectedSerial) return;
+    try {
+        state.notificationCounts = await invoke<Record<string, number>>(
+            "get_notification_counts",
+            { serial: state.selectedSerial },
+        );
+        updateNotificationBadges();
+    } catch {
+        // best effort
+    }
+}
+
+function updateNotificationBadges(): void {
+    document.querySelectorAll(".app-card").forEach(card => {
+        const pkg = (card as HTMLElement).dataset.package;
+        if (!pkg) return;
+        const count = state.notificationCounts[pkg] || 0;
+        let badge = card.querySelector(".notification-badge") as HTMLElement | null;
+        if (count > 0) {
+            if (badge) {
+                badge.textContent = count > 99 ? "99+" : String(count);
+            } else {
+                badge = document.createElement("span");
+                badge.className = "notification-badge";
+                badge.textContent = count > 99 ? "99+" : String(count);
+                const iconArea = card.querySelector(".app-icon-wrap, .app-icon-fallback");
+                if (iconArea) iconArea.appendChild(badge);
+            }
+        } else {
+            badge?.remove();
+        }
+    });
 }
 
 function highlightText(text: string, query: string): string {
@@ -573,6 +609,7 @@ function updateAppGrid(): void {
     grid.replaceChildren(fragment);
     updateFocusedApp();
     renderIcons();
+    updateNotificationBadges();
 }
 
 function createFolderElement(folder: Folder): HTMLElement {
@@ -832,7 +869,9 @@ function renderContextMenu(): void {
     menu.style.top = `${y}px`;
 
     const folders = Object.values(state.folders);
-    const folderOptions = folders.map(f => `
+    const folderOptions = folders
+        .filter(f => f.id !== "favorites")
+        .map(f => `
         <div class="menu-item" data-action="add-to-folder" data-folder-id="${f.id}" data-pkg="${shellEscapeText(pkg)}">
             <span>Add to ${shellEscapeText(f.name)}</span>
         </div>
@@ -883,7 +922,7 @@ async function addToFolder(folderId: string, pkg: string): Promise<void> {
             const folder = state.folders[folderId];
             if (folder && !folder.apps.includes(pkg)) {
                 folder.apps.push(pkg);
-            } else if (!state.folders[folderId]) {
+            } else if (folderId === "favorites") {
                 state.folders[folderId] = { id: folderId, name: "Favorites", apps: [pkg] };
             }
         }
@@ -899,6 +938,7 @@ async function createFolderPrompt(pkg: string): Promise<void> {
     if (!name) return;
     try {
         const id = await invoke<string>("create_folder", { name });
+        state.folders[id] = { id, name, apps: [] };
         state.contextMenu = null;
         renderContextMenu();
         await addToFolder(id, pkg);
@@ -960,7 +1000,10 @@ function initShell(): void {
     
     const shell = document.getElementById("app-shell");
     if (shell) {
-        shell.addEventListener("click", () => shell.focus());
+        shell.addEventListener("click", (e) => {
+            if ((e.target as HTMLElement).closest("input, textarea, select, button")) return;
+            shell.focus();
+        });
     }
 
     renderIcons();
@@ -1128,11 +1171,13 @@ function setupEventDelegation(): void {
         }
     });
 
+    let searchDebounce: ReturnType<typeof setTimeout> | null = null;
     app.addEventListener("input", (event) => {
         const input = event.target as HTMLInputElement;
         if (input.id === "search") {
             state.query = input.value;
-            updateAppGrid();
+            if (searchDebounce) clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => updateAppGrid(), 150);
         }
         if (input.id === "wirelessHostPort") {
             state.wirelessHostPort = input.value;
@@ -1533,6 +1578,7 @@ async function init(): Promise<void> {
             }
         });
 
+        let notifInterval: ReturnType<typeof setInterval> | null = null;
         await listen<AppsLoadedEvent>("apps-loaded", (event) => {
             const { serial, apps } = event.payload;
             if (serial !== state.selectedSerial) return; // stale response
@@ -1540,6 +1586,9 @@ async function init(): Promise<void> {
             state.loadingApps = false;
             updateAppGrid();
             loadCachedMetaAndResolve();
+            fetchNotificationCounts();
+            if (notifInterval) clearInterval(notifInterval);
+            notifInterval = setInterval(fetchNotificationCounts, 30000);
         });
 
         // Per-app metadata resolution events

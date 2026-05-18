@@ -1316,7 +1316,7 @@ fn resolve_app_batch(
             handles.push(std::thread::spawn(move || {
                 let mut google_last = Instant::now() - Duration::from_secs(3);
                 let mut fdroid_last = Instant::now() - Duration::from_secs(3);
-                let delay = Duration::from_millis(300);
+                let delay = Duration::from_millis(1000);
 
                 let mut idx = worker_id;
                 while idx < pkgs.len() {
@@ -1444,6 +1444,23 @@ fn resolve_app_batch(
     });
 
     Ok(())
+}
+
+#[tauri::command]
+fn get_notification_counts(app: tauri::AppHandle, serial: String) -> HashMap<String, u32> {
+    let settings = read_settings(&app);
+    let mut counts = HashMap::new();
+    if let Ok(output) = adb_shell(&settings, &serial, &["dumpsys", "notification"]) {
+        for line in output.lines() {
+            if let Some(rest) = line.split("pkg=").nth(1) {
+                let pkg = rest.split_whitespace().next().unwrap_or("").to_string();
+                if !pkg.is_empty() {
+                    *counts.entry(pkg).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+    counts
 }
 
 #[tauri::command]
@@ -1813,6 +1830,7 @@ pub fn run() {
             get_wireless_devices,
             get_cached_app_meta,
             resolve_app_batch,
+            get_notification_counts,
             prune_cache,
             trigger_refresh,
             trigger_load_apps,
