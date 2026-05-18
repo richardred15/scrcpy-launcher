@@ -12,6 +12,7 @@ import {
     Play,
     RefreshCw,
     Search,
+    Server,
     Settings,
     Smartphone,
     Wifi,
@@ -111,8 +112,11 @@ const state = {
     settingsOpen: false,
     error: "",
     wirelessConnectOpen: false,
-    wirelessHostPort: "",
+    wirelessHost: "",
+    wirelessPort: "5555",
     wirelessConnecting: false,
+    wirelessConnectResult: null as "ok" | "error" | null,
+    wirelessConnectMsg: "",
     wirelessDevices: [] as string[],
     openApps: new Set<string>(),
     folders: {} as Record<string, Folder>,
@@ -122,6 +126,7 @@ const state = {
     launchMessages: new Map<string, { kind: "info" | "error"; text: string }>(),
     contextMenu: null as { x: number; y: number; pkg: string } | null,
     notificationCounts: {} as Record<string, number>,
+    createFolderPkg: "",
 };
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -302,11 +307,29 @@ function renderTempPill(): string {
 }
 
 function renderWirelessForm(): string {
+    let btnLabel = "Connect";
+    let btnClass = "primary-button small";
+    if (state.wirelessConnecting) {
+        btnLabel = "Connecting…";
+    } else if (state.wirelessConnectResult === "ok") {
+        btnLabel = "Connected";
+        btnClass = "primary-button small connected";
+    } else if (state.wirelessConnectResult === "error") {
+        btnLabel = "Connect";
+    }
+    const errHtml = state.wirelessConnectResult === "error" && state.wirelessConnectMsg
+        ? `<div class="wireless-error">${shellEscapeText(state.wirelessConnectMsg)}</div>`
+        : "";
     return `
     <div class="wireless-form">
-      <input id="wirelessHostPort" value="${shellEscapeText(state.wirelessHostPort)}" placeholder="host:port" autocomplete="off" ${state.wirelessConnecting ? "disabled" : ""} />
-      <button class="primary-button small" id="doWirelessConnect" ${state.wirelessConnecting ? "disabled" : ""}>${state.wirelessConnecting ? "Connecting…" : "Connect"}</button>
+      <div class="wireless-fields">
+        <input id="wirelessHost" value="${shellEscapeText(state.wirelessHost)}" placeholder="192.168.1.100" autocomplete="off" spellcheck="false" ${state.wirelessConnecting ? "disabled" : ""} />
+        <span class="wireless-port-sep">:</span>
+        <input id="wirelessPort" value="${shellEscapeText(state.wirelessPort)}" placeholder="5555" autocomplete="off" spellcheck="false" ${state.wirelessConnecting ? "disabled" : ""} />
+      </div>
+      <button class="${btnClass}" id="doWirelessConnect" ${state.wirelessConnecting || state.wirelessConnectResult === "ok" ? "disabled" : ""}>${btnLabel}</button>
       <span class="wireless-close" id="closeWirelessForm">&times;</span>
+      ${errHtml}
     </div>
   `;
 }
@@ -781,8 +804,8 @@ function renderIcons() {
         createIcons({
             icons: {
                 Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium,
-                Cable, MonitorSmartphone, Play, RefreshCw, Search, Settings,
-                Smartphone, Wifi, X,
+                Cable, MonitorSmartphone, Play, RefreshCw, Search, Server,
+                Settings, Smartphone, Wifi, X,
             },
         });
     } catch (error) {
@@ -805,6 +828,7 @@ function updateTopBar(): void {
         ${renderDeviceSelect()}
         ${renderBatteryPill()}
         ${renderTempPill()}
+        <button class="icon-button" id="adbRestart" title="Restart ADB server"><i data-lucide="server"></i></button>
         <button class="icon-button" id="wirelessConnect" title="Connect wireless ADB device"><i data-lucide="wifi"></i></button>
         <button class="icon-button" id="reload" title="Rescan apps and devices"><i data-lucide="refresh-cw"></i></button>
         <button class="icon-button" id="settings" title="Settings"><i data-lucide="settings"></i></button>
@@ -843,15 +867,7 @@ function updateSettings(): void {
 }
 
 function showConnectionGuide(): void {
-    alert(
-        "How to connect your Android device:\n\n" +
-        "1. Go to Settings > About Phone\n" +
-        "2. Tap 'Build Number' 7 times to enable Developer Options\n" +
-        "3. Go to Settings > System > Developer Options\n" +
-        "4. Enable 'USB Debugging'\n" +
-        "5. Connect your phone to this PC via USB\n" +
-        "6. Accept the RSA authorization prompt on your phone screen"
-    );
+    document.getElementById("guide-modal")?.classList.add("open");
 }
 
 function renderContextMenu(): void {
@@ -933,9 +949,32 @@ async function addToFolder(folderId: string, pkg: string): Promise<void> {
     }
 }
 
-async function createFolderPrompt(pkg: string): Promise<void> {
-    const name = prompt("Enter folder name:");
-    if (!name) return;
+function openCreateFolderModal(pkg: string): void {
+    state.createFolderPkg = pkg;
+    const modal = document.getElementById("create-folder-modal");
+    if (!modal) return;
+    modal.classList.add("open");
+    const input = document.getElementById("createFolderName") as HTMLInputElement;
+    if (input) {
+        input.value = "";
+        input.focus();
+    }
+}
+
+function closeCreateFolderModal(): void {
+    state.createFolderPkg = "";
+    document.getElementById("create-folder-modal")?.classList.remove("open");
+}
+
+async function confirmCreateFolder(): Promise<void> {
+    const input = document.getElementById("createFolderName") as HTMLInputElement;
+    const name = input?.value.trim();
+    if (!name) {
+        input?.focus();
+        return;
+    }
+    const pkg = state.createFolderPkg;
+    closeCreateFolderModal();
     try {
         const id = await invoke<string>("create_folder", { name });
         state.folders[id] = { id, name, apps: [] };
@@ -946,6 +985,10 @@ async function createFolderPrompt(pkg: string): Promise<void> {
         state.error = String(e);
         updateErrorBanner();
     }
+}
+
+async function createFolderPrompt(pkg: string): Promise<void> {
+    openCreateFolderModal(pkg);
 }
 
 (window as any).addToFolder = addToFolder;
@@ -995,6 +1038,44 @@ function initShell(): void {
         <div class="modal-overlay"></div>
         <div class="modal-content"></div>
       </div>
+
+      <div id="create-folder-modal" class="folder-modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+          <div class="modal-head">
+            <h2>Create Folder</h2>
+            <button class="icon-button" id="closeCreateFolder" title="Cancel"><i data-lucide="x"></i></button>
+          </div>
+          <div class="create-folder-body">
+            <label class="create-folder-label">Folder name</label>
+            <input id="createFolderName" class="create-folder-input" placeholder="My Folder" autocomplete="off" />
+            <div class="create-folder-actions">
+              <button class="empty-button" id="cancelCreateFolder">Cancel</button>
+              <button class="empty-button primary" id="confirmCreateFolder">Create</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="guide-modal" class="folder-modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+          <div class="modal-head">
+            <h2>Connection Guide</h2>
+            <button class="icon-button" id="closeGuideModal" title="Close"><i data-lucide="x"></i></button>
+          </div>
+          <div class="guide-body">
+            <ol class="guide-list">
+              <li>Go to <strong>Settings</strong> &gt; <strong>About Phone</strong></li>
+              <li>Tap <strong>Build Number</strong> 7 times to enable Developer Options</li>
+              <li>Go to <strong>Settings</strong> &gt; <strong>System</strong> &gt; <strong>Developer Options</strong></li>
+              <li>Enable <strong>USB Debugging</strong></li>
+              <li>Connect your phone to this PC via USB</li>
+              <li>Accept the RSA authorization prompt on your phone screen</li>
+            </ol>
+          </div>
+        </div>
+      </div>
     </main>
   `;
     
@@ -1043,10 +1124,28 @@ function setupEventDelegation(): void {
             }
         }
 
+        const t0 = event.target as HTMLElement;
+        if (t0.closest("#closeGuideModal") || (t0.closest("#guide-modal") && t0.classList.contains("modal-overlay"))) {
+            document.getElementById("guide-modal")?.classList.remove("open");
+            return;
+        }
+
         if ((event.target as HTMLElement).closest("#closeFolderModal") || 
             (event.target as HTMLElement).classList.contains("modal-overlay")) {
             openFolder(null);
             return;
+        }
+
+        if (state.createFolderPkg) {
+            const t = event.target as HTMLElement;
+            if (t.closest("#closeCreateFolder") || t.closest("#cancelCreateFolder") || t.classList.contains("modal-overlay")) {
+                closeCreateFolderModal();
+                return;
+            }
+            if (t.closest("#confirmCreateFolder")) {
+                void confirmCreateFolder();
+                return;
+            }
         }
 
         const target = event.target as HTMLElement;
@@ -1063,12 +1162,15 @@ function setupEventDelegation(): void {
 
         if (target.closest("#wirelessConnect")) {
             state.wirelessConnectOpen = !state.wirelessConnectOpen;
-            state.wirelessHostPort = "";
+            state.wirelessHost = "";
+            state.wirelessPort = "5555";
             state.wirelessConnecting = false;
+            state.wirelessConnectResult = null;
+            state.wirelessConnectMsg = "";
             updateWirelessForm();
             if (state.wirelessConnectOpen) {
                 setTimeout(
-                    () => document.getElementById("wirelessHostPort")?.focus(),
+                    () => document.getElementById("wirelessHost")?.focus(),
                     0,
                 );
             }
@@ -1086,6 +1188,8 @@ function setupEventDelegation(): void {
 
         if (target.closest("#closeWirelessForm")) {
             state.wirelessConnectOpen = false;
+            state.wirelessConnectResult = null;
+            state.wirelessConnectMsg = "";
             updateWirelessForm();
             return;
         }
@@ -1144,6 +1248,11 @@ function setupEventDelegation(): void {
             return;
         }
 
+        if (target.closest("#adbRestart")) {
+            void restartAdb();
+            return;
+        }
+
         if (target.closest("#scanDevices")) {
             void refreshAll();
             return;
@@ -1179,8 +1288,15 @@ function setupEventDelegation(): void {
             if (searchDebounce) clearTimeout(searchDebounce);
             searchDebounce = setTimeout(() => updateAppGrid(), 150);
         }
-        if (input.id === "wirelessHostPort") {
-            state.wirelessHostPort = input.value;
+        if (input.id === "wirelessHost") {
+            state.wirelessHost = input.value;
+            state.wirelessConnectResult = null;
+            state.wirelessConnectMsg = "";
+        }
+        if (input.id === "wirelessPort") {
+            state.wirelessPort = input.value;
+            state.wirelessConnectResult = null;
+            state.wirelessConnectMsg = "";
         }
     });
 
@@ -1193,8 +1309,9 @@ function setupEventDelegation(): void {
             key === "Enter" &&
             state.wirelessConnectOpen &&
             !state.wirelessConnecting &&
+            state.wirelessConnectResult !== "ok" &&
             isInput &&
-            (activeEl as HTMLInputElement).id === "wirelessHostPort"
+            ((activeEl as HTMLInputElement).id === "wirelessHost" || (activeEl as HTMLInputElement).id === "wirelessPort")
         ) {
             void doWirelessConnect();
         } else if (
@@ -1205,6 +1322,19 @@ function setupEventDelegation(): void {
             const apps = filteredApps();
             const item = apps[state.focusedAppIndex];
             if (item) void launch(item);
+        }
+
+        if (
+            key === "Enter" &&
+            state.createFolderPkg &&
+            isInput &&
+            (activeEl as HTMLInputElement).id === "createFolderName"
+        ) {
+            void confirmCreateFolder();
+        }
+
+        if (key === "Escape" && state.createFolderPkg) {
+            closeCreateFolderModal();
         }
 
         if (key === "Backspace" && state.query !== "") {
@@ -1255,26 +1385,25 @@ function setupEventDelegation(): void {
 }
 
 async function doWirelessConnect(): Promise<void> {
-    const hostPort = state.wirelessHostPort.trim();
-    if (!hostPort) return;
-    const parts = hostPort.split(":");
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
-        state.error = "Invalid format. Use host:port (e.g., 192.168.1.100:5555)";
-        state.wirelessConnecting = false;
+    const host = state.wirelessHost.trim();
+    const port = state.wirelessPort.trim();
+    if (!host) {
+        state.wirelessConnectResult = "error";
+        state.wirelessConnectMsg = "IP address is required";
         updateWirelessForm();
-        updateErrorBanner();
         return;
     }
-    const [host, port] = parts;
-    const portNum = parseInt(port, 10);
+    const portNum = port ? parseInt(port, 10) : 5555;
     if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-        state.error = "Port must be a number between 1 and 65535";
-        state.wirelessConnecting = false;
+        state.wirelessConnectResult = "error";
+        state.wirelessConnectMsg = "Port must be a number between 1 and 65535";
         updateWirelessForm();
-        updateErrorBanner();
         return;
     }
+    const hostPort = `${host}:${portNum}`;
     state.wirelessConnecting = true;
+    state.wirelessConnectResult = null;
+    state.wirelessConnectMsg = "";
     state.error = "";
     updateWirelessForm();
     updateErrorBanner();
@@ -1286,22 +1415,29 @@ async function doWirelessConnect(): Promise<void> {
             result.includes("connected to")
         ) {
             await invoke("save_wireless_device", { hostPort });
-            state.wirelessConnectOpen = false;
-            state.wirelessHostPort = "";
             state.wirelessConnecting = false;
+            state.wirelessConnectResult = "ok";
+            state.wirelessConnectMsg = "";
+            updateWirelessForm();
+            await new Promise((r) => setTimeout(r, 1000));
+            state.wirelessConnectOpen = false;
+            state.wirelessHost = "";
+            state.wirelessPort = "5555";
+            state.wirelessConnectResult = null;
+            state.wirelessConnectMsg = "";
             await refreshAll();
             await loadWirelessDevices();
         } else {
-            state.error = result;
+            state.wirelessConnectResult = "error";
+            state.wirelessConnectMsg = result;
             state.wirelessConnecting = false;
             updateWirelessForm();
-            updateErrorBanner();
         }
     } catch (e: any) {
-        state.error = String(e);
+        state.wirelessConnectResult = "error";
+        state.wirelessConnectMsg = typeof e === "string" ? e : String(e);
         state.wirelessConnecting = false;
         updateWirelessForm();
-        updateErrorBanner();
     }
 }
 
@@ -1324,7 +1460,8 @@ async function doWirelessDisconnect(hostPort: string): Promise<void> {
 
 async function doWirelessReconnect(hostPort: string): Promise<void> {
     state.error = "";
-    state.wirelessConnecting = true;
+    state.wirelessConnectResult = null;
+    state.wirelessConnectMsg = "";
     updateWirelessForm();
     updateErrorBanner();
     try {
@@ -1333,18 +1470,13 @@ async function doWirelessReconnect(hostPort: string): Promise<void> {
             result.includes("already connected") ||
             result.includes("connected to")
         ) {
-            state.wirelessConnecting = false;
             await refreshAll();
         } else {
             state.error = result;
-            state.wirelessConnecting = false;
-            updateWirelessForm();
             updateErrorBanner();
         }
     } catch (e: any) {
         state.error = String(e);
-        state.wirelessConnecting = false;
-        updateWirelessForm();
         updateErrorBanner();
     }
 }
@@ -1362,6 +1494,24 @@ async function loadWirelessDevices(): Promise<void> {
 async function closeSettings(): Promise<void> {
     state.settingsOpen = false;
     updateSettings();
+}
+
+async function restartAdb(): Promise<void> {
+    state.error = "";
+    updateErrorBanner();
+    try {
+        await invoke("adb_restart_server");
+    } catch (e: any) {
+        state.error = String(e);
+        updateErrorBanner();
+        return;
+    }
+    state.loadingDevices = true;
+    state.loadingApps = true;
+    updateTopBar();
+    invoke("trigger_refresh");
+    if (state.selectedSerial) beginLoadApps(state.selectedSerial);
+    loadWirelessDevices();
 }
 
 async function refreshAll(): Promise<void> {

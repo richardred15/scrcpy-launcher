@@ -621,6 +621,7 @@ code {
 
 .wireless-form {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   padding: 8px 20px;
@@ -628,13 +629,18 @@ code {
   border-bottom: 1px solid rgba(123, 212, 208, 0.2);
 }
 
-.wireless-form input {
+.wireless-fields {
+  display: flex;
+  align-items: center;
+  gap: 0;
   flex: 1;
-  max-width: 220px;
+  min-width: 200px;
+}
+
+.wireless-fields input {
   height: 32px;
   font-size: 13px;
   border: 1px solid #3d5252;
-  border-radius: 6px;
   background: #132424;
   color: #dce4e4;
   padding: 0 10px;
@@ -642,8 +648,35 @@ code {
   font-family: inherit;
 }
 
-.wireless-form input:focus {
+.wireless-fields input:focus {
   border-color: #7bd4d0;
+}
+
+#wirelessHost {
+  flex: 1;
+  min-width: 120px;
+  border-radius: 6px 0 0 6px;
+  border-right: none;
+}
+
+#wirelessPort {
+  width: 72px;
+  border-radius: 0 6px 6px 0;
+}
+
+.wireless-port-sep {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 4px;
+  background: #132424;
+  border-top: 1px solid #3d5252;
+  border-bottom: 1px solid #3d5252;
+  color: #5a7a7a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .wireless-close {
@@ -656,6 +689,19 @@ code {
 
 .wireless-close:hover {
   color: #dce4e4;
+}
+
+.wireless-error {
+  width: 100%;
+  font-size: 12px;
+  color: #e57373;
+  padding: 0 2px;
+}
+
+.primary-button.small.connected {
+  background: #2e7d32;
+  color: #e8f5e9;
+  border-color: #388e3c;
 }
 
 .device-wifi {
@@ -973,6 +1019,74 @@ code {
   width: 48px;
   height: 48px;
   border-radius: 12px;
+}
+
+.create-folder-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.create-folder-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #aeb4bc;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.create-folder-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #eef0f3;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 150ms ease;
+}
+
+.create-folder-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.create-folder-input:focus {
+  border-color: #7bd4d0;
+}
+
+.create-folder-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.guide-body {
+  padding: 24px 28px;
+}
+
+.guide-list {
+  margin: 0;
+  padding: 0 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 15px;
+  color: #c8cdd4;
+  line-height: 1.5;
+}
+
+.guide-list li::marker {
+  color: #7bd4d0;
+  font-weight: 700;
+}
+
+.guide-list strong {
+  color: #eef0f3;
+  font-weight: 700;
 }
 
 .empty-msg {

@@ -1530,6 +1530,34 @@ fn adb_connect(app: tauri::AppHandle, host_port: String) -> Result<String, Strin
 }
 
 #[tauri::command]
+fn adb_restart_server(app: tauri::AppHandle) -> Result<String, String> {
+    let settings = read_settings(&app);
+    eprintln!("adb_restart_server");
+    let kill = Command::new(&settings.adb_path)
+        .arg("kill-server")
+        .output()
+        .map_err(|e| format!("Failed to run adb kill-server: {e}"))?;
+    if !kill.status.success() {
+        let stderr = String::from_utf8_lossy(&kill.stderr);
+        eprintln!("adb kill-server FAILED: {}", stderr);
+        return Err(format!("ADB kill-server failed: {stderr}"));
+    }
+    let start = Command::new(&settings.adb_path)
+        .arg("start-server")
+        .output()
+        .map_err(|e| format!("Failed to run adb start-server: {e}"))?;
+    let stdout = String::from_utf8_lossy(&start.stdout).trim().to_string();
+    if start.status.success() {
+        eprintln!("adb_restart_server: OK");
+        Ok(stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&start.stderr);
+        eprintln!("adb_restart_server: FAILED: {}", stderr);
+        Err(format!("ADB start-server failed: {stderr}"))
+    }
+}
+
+#[tauri::command]
 fn adb_disconnect(app: tauri::AppHandle, host_port: String) -> Result<String, String> {
     let settings = read_settings(&app);
     eprintln!("adb_disconnect: {}", host_port);
@@ -1824,6 +1852,7 @@ pub fn run() {
             launch_mirror,
             adb_connect,
             adb_disconnect,
+            adb_restart_server,
             get_open_apps,
             save_wireless_device,
             remove_wireless_device,
