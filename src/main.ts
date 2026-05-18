@@ -539,7 +539,7 @@ function updateAppGrid(): void {
 
     const device = selectedDevice();
 
-    if (!device && state.devices.length === 0) {
+    if (!state.selectedSerial) {
         grid.innerHTML = `
       <section class="empty">
         <i data-lucide="monitor-smartphone"></i>
@@ -1552,6 +1552,7 @@ async function init(): Promise<void> {
             updateOpenStatus();
         });
 
+        let notifInterval: ReturnType<typeof setInterval> | null = null;
         await listen<Device[]>("devices-updated", (event) => {
             const devices = event.payload;
             const previousSerial = state.selectedSerial;
@@ -1573,12 +1574,28 @@ async function init(): Promise<void> {
 
             const selectedChanged = previousSerial !== state.selectedSerial;
             const devicesChanged = previousKey !== nextKey;
-            if (state.selectedSerial && (selectedChanged || devicesChanged)) {
+
+            if (!state.selectedSerial) {
+                state.apps = [];
+                state.resolveQueue = new Set();
+                state.focusedAppIndex = null;
+                state.notificationCounts = {};
+                state.loadingApps = false;
+                if (selectedChanged) {
+                    state.error = "Device disconnected";
+                    updateErrorBanner();
+                }
+                if (notifInterval) {
+                    clearInterval(notifInterval);
+                    notifInterval = null;
+                }
+                updateAppGrid();
+                updateControlRow();
+            } else if (selectedChanged || devicesChanged) {
                 beginLoadApps(state.selectedSerial);
             }
         });
 
-        let notifInterval: ReturnType<typeof setInterval> | null = null;
         await listen<AppsLoadedEvent>("apps-loaded", (event) => {
             const { serial, apps } = event.payload;
             if (serial !== state.selectedSerial) return; // stale response
