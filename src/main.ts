@@ -19,6 +19,12 @@ import {
 } from "lucide";
 import "./styles.css";
 
+type Folder = {
+    id: string;
+    name: string;
+    apps: string[];
+};
+
 type SettingsState = {
     adbPath: string;
     scrcpyPath: string;
@@ -30,6 +36,8 @@ type SettingsState = {
     killOnClose: boolean;
     displayBounds: string;
     deviceDisplayBounds: Record<string, string>;
+    wirelessDevices: string[];
+    folders: Record<string, Folder>;
 };
 
 type BinaryStatus = {
@@ -107,8 +115,12 @@ const state = {
     wirelessConnecting: false,
     wirelessDevices: [] as string[],
     openApps: new Set<string>(),
+    folders: {} as Record<string, Folder>,
+    currentFolderId: null as string | null,
+    focusedAppIndex: null as number | null,
     launchingPackage: "",
     launchMessages: new Map<string, { kind: "info" | "error"; text: string }>(),
+    contextMenu: null as { x: number; y: number; pkg: string } | null,
 };
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -153,14 +165,40 @@ function selectedDevice(): Device | undefined {
     );
 }
 
+function isFavorited(pkg: string): boolean {
+    return state.folders["favorites"]?.apps.includes(pkg) ?? false;
+}
+
 function filteredApps(): AndroidApp[] {
     const query = state.query.trim().toLowerCase();
-    if (!query) return state.apps;
-    return state.apps.filter((item) => {
-        return (
-            item.label.toLowerCase().includes(query) ||
-            item.packageName.toLowerCase().includes(query)
-        );
+
+    // Collect all apps that belong to any folder (including Favorites)
+    const allFolderApps = new Set<string>();
+    Object.values(state.folders).forEach(f => {
+        f.apps.forEach(pkg => allFolderApps.add(pkg));
+    });
+
+    // During search, show everything; otherwise hide folder apps
+    let apps = query ? state.apps : state.apps.filter(app => !allFolderApps.has(app.packageName));
+
+    if (query) {
+        apps = apps.filter((item) => {
+            return (
+                item.label.toLowerCase().includes(query) ||
+                item.packageName.toLowerCase().includes(query)
+            );
+        });
+    }
+
+    return [...apps].sort((a, b) => {
+        if (query) {
+            const aFav = isFavorited(a.packageName);
+            const bFav = isFavorited(b.packageName);
+            if (aFav !== bFav) {
+                return aFav ? -1 : 1;
+            }
+        }
+        return a.label.localeCompare(b.label);
     });
 }
 
@@ -283,6 +321,20 @@ function renderAppIcon(item: AndroidApp): string {
   `;
 }
 
+function highlightText(text: string, query: string): string {
+    if (!query) return shellEscapeText(text);
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const index = lowerText.indexOf(lowerQuery);
+    if (index === -1) return shellEscapeText(text);
+
+    const prefix = text.slice(0, index);
+    const match = text.slice(index, index + query.length);
+    const suffix = text.slice(index + query.length);
+
+    return `${shellEscapeText(prefix)}<span class="highlight">${shellEscapeText(match)}</span>${shellEscapeText(suffix)}`;
+}
+
 function createAppCardElement(item: AndroidApp): HTMLButtonElement {
     const btn = document.createElement("button");
     btn.className = "app-card";
@@ -291,6 +343,9 @@ function createAppCardElement(item: AndroidApp): HTMLButtonElement {
 
     if (state.openApps.has(item.packageName)) {
         btn.classList.add("open");
+    }
+    if (isFavorited(item.packageName)) {
+        btn.classList.add("favorite");
     }
 
     const message = state.launchMessages.get(item.packageName);
@@ -302,8 +357,8 @@ function createAppCardElement(item: AndroidApp): HTMLButtonElement {
 
     btn.innerHTML = `
     ${renderAppIcon(item)}
-    <span class="app-name">${shellEscapeText(item.label)}</span>
-    ${showPackage ? `<span class="package-name">${shellEscapeText(item.packageName)}</span>` : ""}
+    <span class="app-name">${highlightText(item.label, state.query)}</span>
+    ${showPackage ? `<span class="package-name">${highlightText(item.packageName, state.query)}</span>` : ""}
     ${message ? `<span class="launch-message">${shellEscapeText(message.text)}</span>` : ""}
   `;
 
@@ -315,6 +370,9 @@ function updateCardElement(card: HTMLElement, item: AndroidApp): void {
     if (state.openApps.has(item.packageName)) {
         card.classList.add("open");
     }
+    if (isFavorited(item.packageName)) {
+        card.classList.add("favorite");
+    }
 
     const message = state.launchMessages.get(item.packageName);
     if (message) {
@@ -322,8 +380,8 @@ function updateCardElement(card: HTMLElement, item: AndroidApp): void {
     }
 
     const nameEl = card.querySelector(".app-name");
-    if (nameEl && nameEl.textContent !== item.label) {
-        nameEl.textContent = item.label;
+    if (nameEl && nameEl.innerHTML !== highlightText(item.label, state.query)) {
+        nameEl.innerHTML = highlightText(item.label, state.query);
     }
 
     const showPackage = item.label === prettyLabel(item.packageName);
@@ -332,10 +390,10 @@ function updateCardElement(card: HTMLElement, item: AndroidApp): void {
         if (!pkgEl) {
             const span = document.createElement("span");
             span.className = "package-name";
-            span.textContent = item.packageName;
+            span.innerHTML = highlightText(item.packageName, state.query);
             nameEl?.after(span);
-        } else if (pkgEl.textContent !== item.packageName) {
-            pkgEl.textContent = item.packageName;
+        } else if (pkgEl.innerHTML !== highlightText(item.packageName, state.query)) {
+            pkgEl.innerHTML = highlightText(item.packageName, state.query);
         }
     } else {
         pkgEl?.remove();
@@ -373,6 +431,72 @@ function updateOpenStatus(): void {
     }
 }
 
+
+function openFolder(id: string | null): void {
+    if (id === null) {
+        state.currentFolderId = null;
+        document.getElementById("folder-modal")?.classList.remove("open");
+        return;
+    }
+    state.currentFolderId = id;
+    const modal = document.getElementById("folder-modal");
+    if (modal) {
+        modal.classList.add("open");
+        updateFolderModal();
+    }
+}
+
+function updateFolderModal(): void {
+    const modal = document.getElementById("folder-modal");
+    if (!modal) return;
+    const content = modal.querySelector(".modal-content");
+    if (!content) return;
+
+    const id = state.currentFolderId;
+    if (!id) return;
+
+    let apps: AndroidApp[] = [];
+    let title = "";
+
+    const folder = state.folders[id];
+    if (folder) {
+        title = folder.name;
+        apps = id === "favorites"
+            ? state.apps.filter(a => isFavorited(a.packageName))
+            : state.apps.filter(a => folder.apps.includes(a.packageName));
+    }
+
+    content.innerHTML = `
+        <div class="modal-head">
+            <h2>${shellEscapeText(title)}</h2>
+            <button class="icon-button" id="closeFolderModal" title="Close"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-grid">
+            ${apps.length > 0 
+                ? apps.map(app => `
+                    <div class="modal-app-card" data-launch="${app.packageName}">
+                        ${renderAppIcon(app)}
+                        <span>${shellEscapeText(app.label)}</span>
+                    </div>
+                `).join("")
+                : '<p class="empty-msg">No apps in this folder</p>'
+            }
+        </div>
+    `;
+    renderIcons();
+}
+
+function updateFocusedApp(): void {
+    const cards = document.querySelectorAll<HTMLElement>(".app-card");
+    cards.forEach((card, index) => {
+        if (index === state.focusedAppIndex) {
+            card.classList.add("focused");
+        } else {
+            card.classList.remove("focused");
+        }
+    });
+}
+
 function updateAppGrid(): void {
     const grid = document.querySelector<HTMLElement>("#appGrid");
     if (!grid) return;
@@ -385,6 +509,10 @@ function updateAppGrid(): void {
         <i data-lucide="monitor-smartphone"></i>
         <h2>Connect an Android device</h2>
         <p>Enable USB debugging, connect the device, and authorize this computer when Android asks.</p>
+        <div class="empty-actions">
+          <button class="empty-button primary" id="scanDevices">Scan for Devices</button>
+          <button class="empty-button" id="showGuide">How to connect?</button>
+        </div>
       </section>
     `;
         try {
@@ -414,38 +542,65 @@ function updateAppGrid(): void {
         <i data-lucide="search"></i>
         <h2>No apps found</h2>
         <p>Try changing the search or enabling system apps in settings.</p>
+        <div class="empty-actions">
+          <button class="empty-button primary" id="clearSearch">Clear Search</button>
+        </div>
       </section>
     `;
         try {
             createIcons({ icons: { Search } });
         } catch {}
+        state.focusedAppIndex = null;
         return;
     }
 
-    const existingMap = new Map<string, HTMLElement>();
-    for (const child of [...grid.children]) {
-        const el = child as HTMLElement;
-        const pkg = el.dataset.package;
-        if (pkg) existingMap.set(pkg, el);
+    if (state.query.trim() !== "") {
+        state.focusedAppIndex = 0;
     }
 
     const fragment = document.createDocumentFragment();
-    for (const item of apps) {
-        const existing = existingMap.get(item.packageName);
-        if (existing) {
-            updateCardElement(existing, item);
-            fragment.appendChild(existing);
-            existingMap.delete(item.packageName);
-        } else {
-            fragment.appendChild(createAppCardElement(item));
-        }
-    }
 
-    for (const [, el] of existingMap) {
-        el.remove();
+    // Folders first
+    Object.values(state.folders).forEach(folder => {
+        fragment.appendChild(createFolderElement(folder));
+    });
+
+    // Then apps
+    for (const item of apps) {
+        fragment.appendChild(createAppCardElement(item));
     }
 
     grid.replaceChildren(fragment);
+    updateFocusedApp();
+    renderIcons();
+}
+
+function createFolderElement(folder: Folder): HTMLElement {
+    const div = document.createElement("div");
+    div.className = "folder-card";
+    div.dataset.folderId = folder.id;
+    
+    const apps = folder.id === "favorites"
+        ? state.apps.filter(a => isFavorited(a.packageName))
+        : state.apps.filter(a => folder.apps.includes(a.packageName));
+
+    const previewIcons = apps.slice(0, 4).map(app => {
+        return app.iconUrl 
+            ? `<img src="${shellEscapeText(app.iconUrl)}" class="folder-preview-icon" />`
+            : `<div class="folder-preview-icon fallback" style="background: ${iconSeed(app.packageName)}"></div>`;
+    }).join("");
+
+    const label = folder.name;
+    
+    div.innerHTML = `
+      <div class="folder-preview">
+        ${previewIcons}
+        ${apps.length > 4 ? `<span class="folder-count">+${apps.length - 4}</span>` : ""}
+      </div>
+      <span class="folder-label">${shellEscapeText(label)}</span>
+    `;
+    div.onclick = () => openFolder(div.dataset.folderId ?? null);
+    return div;
 }
 
 function updateControlRow(): void {
@@ -462,6 +617,7 @@ function updateControlRow(): void {
             chip.title = `${base} · ${state.apps.length} apps${queue ? ` (resolving ${queue}…)` : ""}`;
         }
     }
+    renderIcons();
     const selectWrap = document.querySelector<HTMLElement>(".device-select");
     if (selectWrap) {
         const device = selectedDevice();
@@ -484,19 +640,8 @@ function updateStickyState(): void {
 }
 
 function renderSettings(): string {
-    if (!state.settings || !state.settingsOpen) return "";
+    if (!state.settings) return "";
     return `
-    <div class="scrim" id="closeSettings"></div>
-    <aside class="settings-panel" aria-label="Settings">
-      <div class="panel-head">
-        <div>
-          <h2>Settings</h2>
-          <p>Point the launcher at your local Android tools.</p>
-        </div>
-        <button class="icon-button" id="settingsX" title="Close settings"><i data-lucide="x"></i></button>
-      </div>
-
-      <div class="settings-scroll">
         <label class="field">
           <span>ADB path</span>
           <input id="adbPath" value="${shellEscapeText(state.settings.adbPath)}" placeholder="adb" />
@@ -591,10 +736,6 @@ function renderSettings(): string {
           <p><strong>kdotool</strong> — required for window focus on KDE Wayland. Install with <code>cargo install kdotool</code>.</p>
           <p><strong>xdotool</strong> — used as fallback on X11. Install <code>xdotool</code> from your distro (Linux).</p>
         </div>
-      </div>
-
-      <button class="primary-button" id="saveSettings">Save settings</button>
-    </aside>
   `;
 }
 
@@ -649,15 +790,130 @@ function updateErrorBanner(): void {
 }
 
 function updateSettings(): void {
-    const container = document.getElementById("settings-container");
-    if (!container) return;
-    container.innerHTML = renderSettings();
+    const panel = document.getElementById("settings-panel");
+    const scrim = document.getElementById("closeSettings");
+    const scroll = document.getElementById("settings-scroll");
+    if (!panel || !scrim || !scroll) return;
+    if (state.settingsOpen && state.settings) {
+        scroll.innerHTML = renderSettings();
+        panel.classList.add("open");
+        scrim.classList.add("open");
+    } else {
+        panel.classList.remove("open");
+        scrim.classList.remove("open");
+    }
     renderIcons();
 }
 
+function showConnectionGuide(): void {
+    alert(
+        "How to connect your Android device:\n\n" +
+        "1. Go to Settings > About Phone\n" +
+        "2. Tap 'Build Number' 7 times to enable Developer Options\n" +
+        "3. Go to Settings > System > Developer Options\n" +
+        "4. Enable 'USB Debugging'\n" +
+        "5. Connect your phone to this PC via USB\n" +
+        "6. Accept the RSA authorization prompt on your phone screen"
+    );
+}
+
+function renderContextMenu(): void {
+    const menu = document.getElementById("context-menu");
+    if (!menu) return;
+
+    if (!state.contextMenu) {
+        menu.style.display = "none";
+        return;
+    }
+
+    const { x, y, pkg } = state.contextMenu;
+    menu.style.display = "block";
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+
+    const folders = Object.values(state.folders);
+    const folderOptions = folders.map(f => `
+        <div class="menu-item" data-action="add-to-folder" data-folder-id="${f.id}" data-pkg="${shellEscapeText(pkg)}">
+            <span>Add to ${shellEscapeText(f.name)}</span>
+        </div>
+    `).join("");
+
+    const isFav = isFavorited(pkg);
+
+    menu.innerHTML = `
+        <div class="menu-group">
+            <div class="menu-item" data-action="add-to-folder" data-folder-id="favorites" data-pkg="${shellEscapeText(pkg)}">
+                <span>${isFav ? "Remove from" : "Add to"} Favorites</span>
+            </div>
+        </div>
+        <div class="menu-group">
+            <div class="menu-item" data-action="create-folder" data-pkg="${shellEscapeText(pkg)}">
+                <span>Create New Folder</span>
+            </div>
+            ${folderOptions}
+        </div>
+    `;
+
+    menu.querySelectorAll(".menu-item").forEach(item => {
+        item.addEventListener("click", async () => {
+            const action = item.getAttribute("data-action");
+            const pkgValue = item.getAttribute("data-pkg")!;
+            if (action === "create-folder") {
+                await createFolderPrompt(pkgValue);
+            } else if (action === "add-to-folder") {
+                const folderId = item.getAttribute("data-folder-id")!;
+                await addToFolder(folderId, pkgValue);
+            }
+            state.contextMenu = null;
+            renderContextMenu();
+        });
+    });
+}
+
+async function addToFolder(folderId: string, pkg: string): Promise<void> {
+    try {
+        if (folderId === "favorites" && isFavorited(pkg)) {
+            await invoke("remove_app_from_folder", { folderId, packageName: pkg });
+            const folder = state.folders["favorites"];
+            if (folder) {
+                folder.apps = folder.apps.filter(p => p !== pkg);
+            }
+        } else {
+            await invoke("add_app_to_folder", { folderId, packageName: pkg });
+            const folder = state.folders[folderId];
+            if (folder && !folder.apps.includes(pkg)) {
+                folder.apps.push(pkg);
+            } else if (!state.folders[folderId]) {
+                state.folders[folderId] = { id: folderId, name: "Favorites", apps: [pkg] };
+            }
+        }
+        updateAppGrid();
+    } catch (e: any) {
+        state.error = String(e);
+        updateErrorBanner();
+    }
+}
+
+async function createFolderPrompt(pkg: string): Promise<void> {
+    const name = prompt("Enter folder name:");
+    if (!name) return;
+    try {
+        const id = await invoke<string>("create_folder", { name });
+        state.contextMenu = null;
+        renderContextMenu();
+        await addToFolder(id, pkg);
+    } catch (e: any) {
+        state.error = String(e);
+        updateErrorBanner();
+    }
+}
+
+(window as any).addToFolder = addToFolder;
+(window as any).createFolderPrompt = createFolderPrompt;
+
 function initShell(): void {
     app.innerHTML = `
-    <main class="shell">
+    <main class="shell" id="app-shell" tabindex="-1">
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark"><img src="/app-icon.png" class="brand-icon" alt="" /></div>
@@ -679,10 +935,34 @@ function initShell(): void {
       </section>
 
       <div id="error-container"></div>
+      <div id="context-menu" class="context-menu"></div>
       <section id="appGrid" class="app-grid"></section>
-      <div id="settings-container"></div>
+
+      <div class="scrim" id="closeSettings"></div>
+      <aside class="settings-panel" id="settings-panel" aria-label="Settings">
+        <div class="panel-head">
+          <div>
+            <h2>Settings</h2>
+            <p>Point the launcher at your local Android tools.</p>
+          </div>
+          <button class="icon-button" id="settingsX" title="Close settings"><i data-lucide="x"></i></button>
+        </div>
+        <div class="settings-scroll" id="settings-scroll"></div>
+        <button class="primary-button" id="saveSettings">Save settings</button>
+      </aside>
+
+      <div id="folder-modal" class="folder-modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content"></div>
+      </div>
     </main>
   `;
+    
+    const shell = document.getElementById("app-shell");
+    if (shell) {
+        shell.addEventListener("click", () => shell.focus());
+    }
+
     renderIcons();
     updateShellDeviceSerial();
     updateTopBar();
@@ -694,9 +974,39 @@ function initShell(): void {
 }
 
 function setupEventDelegation(): void {
-    app.addEventListener("click", (event) => {
+    app.addEventListener("contextmenu", (event) => {
         const target = event.target as HTMLElement;
+        const card = target.closest("[data-package]");
+        if (card) {
+            event.preventDefault();
+            state.contextMenu = {
+                x: event.clientX,
+                y: event.clientY,
+                pkg: (card as HTMLElement).dataset.package!,
+            };
+            renderContextMenu();
+        } else {
+            state.contextMenu = null;
+            renderContextMenu();
+        }
+    });
 
+    app.addEventListener("click", (event) => {
+        if (state.contextMenu) {
+            const target = event.target as HTMLElement;
+            if (!target.closest(".context-menu")) {
+                state.contextMenu = null;
+                renderContextMenu();
+            }
+        }
+
+        if ((event.target as HTMLElement).closest("#closeFolderModal") || 
+            (event.target as HTMLElement).classList.contains("modal-overlay")) {
+            openFolder(null);
+            return;
+        }
+
+        const target = event.target as HTMLElement;
         if (target.closest("#settings")) {
             state.settingsOpen = true;
             updateSettings();
@@ -718,6 +1028,15 @@ function setupEventDelegation(): void {
                     () => document.getElementById("wirelessHostPort")?.focus(),
                     0,
                 );
+            }
+            return;
+        }
+
+        const folderCard = target.closest(".folder-card");
+        if (folderCard) {
+            const id = (folderCard as HTMLElement).dataset.folderId;
+            if (id) {
+                openFolder(id === "favorites" ? "favorites" : id);
             }
             return;
         }
@@ -781,6 +1100,24 @@ function setupEventDelegation(): void {
             void saveSettings();
             return;
         }
+
+        if (target.closest("#scanDevices")) {
+            void refreshAll();
+            return;
+        }
+
+        if (target.closest("#showGuide")) {
+            showConnectionGuide();
+            return;
+        }
+
+        if (target.closest("#clearSearch")) {
+            state.query = "";
+            const searchInput = document.getElementById("search") as HTMLInputElement | null;
+            if (searchInput) searchInput.value = "";
+            updateAppGrid();
+            return;
+        }
     });
 
     app.addEventListener("change", (event) => {
@@ -802,15 +1139,56 @@ function setupEventDelegation(): void {
         }
     });
 
-    app.addEventListener("keydown", (event) => {
+    window.addEventListener("keydown", (event) => {
+        const key = (event as KeyboardEvent).key;
+        const activeEl = document.activeElement;
+        const isInput = activeEl instanceof HTMLInputElement;
+
         if (
-            (event as KeyboardEvent).key === "Enter" &&
+            key === "Enter" &&
             state.wirelessConnectOpen &&
-            !state.wirelessConnecting
+            !state.wirelessConnecting &&
+            isInput &&
+            (activeEl as HTMLInputElement).id === "wirelessHostPort"
         ) {
-            const input = document.getElementById("wirelessHostPort");
-            if (input && document.activeElement === input) {
-                void doWirelessConnect();
+            void doWirelessConnect();
+        } else if (
+            key === "Enter" &&
+            !isInput &&
+            state.focusedAppIndex !== null
+        ) {
+            const apps = filteredApps();
+            const item = apps[state.focusedAppIndex];
+            if (item) void launch(item);
+        }
+
+        if (key === "Backspace" && state.query !== "") {
+            const searchInput = document.getElementById("search") as HTMLInputElement | null;
+            const activeEl = document.activeElement;
+            if (searchInput && activeEl !== searchInput && !(activeEl instanceof HTMLInputElement)) {
+                state.query = "";
+                searchInput.value = "";
+                updateAppGrid();
+            }
+        }
+
+        if (!isInput) {
+            if (key === "ArrowRight" || key === "ArrowDown") {
+                const apps = filteredApps();
+                if (apps.length > 0) {
+                    state.focusedAppIndex = state.focusedAppIndex === null 
+                        ? 0 
+                        : (state.focusedAppIndex + 1) % apps.length;
+                    updateFocusedApp();
+                }
+            } else if (key === "ArrowLeft" || key === "ArrowUp") {
+                const apps = filteredApps();
+                if (apps.length > 0) {
+                    state.focusedAppIndex = state.focusedAppIndex === null 
+                        ? apps.length - 1 
+                        : (state.focusedAppIndex - 1 + apps.length) % apps.length;
+                    updateFocusedApp();
+                }
             }
         }
     });
@@ -954,6 +1332,7 @@ async function refreshAll(): Promise<void> {
 
 async function loadSettings(): Promise<void> {
     state.settings = await invoke<SettingsState>("get_settings");
+    state.folders = state.settings?.folders || {};
 }
 
 async function saveSettings(): Promise<void> {

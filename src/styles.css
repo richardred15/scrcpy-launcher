@@ -219,7 +219,7 @@ svg {
   margin-bottom: 12px;
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: 100;
   padding: 6px 0;
   transition: background 150ms ease;
 }
@@ -283,9 +283,23 @@ svg {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.app-card:active {
+  transform: scale(0.96);
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .app-card.open {
   border-color: rgba(123, 212, 208, 0.6);
   background: rgba(123, 212, 208, 0.05);
+}
+
+.app-card.favorite {
+  border-color: rgba(255, 215, 0, 0.3);
+}
+
+.highlight {
+  color: #7bd4d0;
+  font-weight: 700;
 }
 
 .app-card.has-message {
@@ -359,9 +373,42 @@ svg {
   min-height: 420px;
   place-items: center;
   align-content: center;
-  gap: 10px;
+  gap: 12px;
   text-align: center;
   grid-column: 1 / -1;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.empty-button {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #eef0f3;
+  transition: background 150ms ease;
+}
+
+.empty-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.empty-button.primary {
+  background: #7bd4d0;
+  color: #081111;
+  border-color: transparent;
+}
+
+.empty-button.primary:hover {
+  background: #6abdbb;
 }
 
 .empty svg {
@@ -378,6 +425,15 @@ svg {
   inset: 0;
   z-index: 20;
   background: rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 200ms ease, visibility 0s linear 200ms;
+}
+
+.scrim.open {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 .settings-panel {
@@ -391,8 +447,19 @@ svg {
   height: 100vh;
   padding: 24px;
   border-left: 1px solid rgba(255, 255, 255, 0.12);
-  background: #17191c;
+  background: rgba(23, 25, 28, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow: -24px 0 70px rgba(0, 0, 0, 0.36);
+  transform: translateX(100%);
+  transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 250ms;
+  visibility: hidden;
+}
+
+.settings-panel.open {
+  transform: translateX(0);
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 .settings-scroll {
@@ -640,3 +707,255 @@ code {
 .wireless-device-actions .icon-button.tiny:hover {
   opacity: 1;
 }
+
+.folders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 0 8px;
+}
+
+.folder-card {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: rgba(123, 212, 208, 0.1);
+  border: 1px solid rgba(123, 212, 208, 0.2);
+  border-radius: 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all 150ms ease;
+  padding: 16px 12px 10px;
+  text-align: center;
+}
+
+.folder-card:hover {
+  background: rgba(123, 212, 208, 0.15);
+  border-color: rgba(123, 212, 208, 0.4);
+  transform: translateY(-2px);
+}
+
+.folder-card.active {
+  background: rgba(123, 212, 208, 0.2);
+  border-color: #7bd4d0;
+}
+
+.folder-preview {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  margin-bottom: auto;
+  position: relative;
+}
+
+.folder-preview-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.folder-preview-icon.fallback {
+  background: #8fa8a8;
+}
+
+.folder-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 10px;
+  background: #7bd4d0;
+  color: #081111;
+  border-radius: 10px;
+  padding: 0 4px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.folder-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a8c4c4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(123, 212, 208, 0.1);
+  border: 1px solid rgba(123, 212, 208, 0.2);
+  color: #a8c4c4;
+  padding: 4px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 12px;
+  transition: all 150ms ease;
+}
+
+.back-button:hover {
+  background: rgba(123, 212, 208, 0.2);
+  color: #7bd4d0;
+}
+
+.back-button i {
+  width: 14px;
+  height: 14px;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: rgba(30, 35, 35, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(123, 212, 208, 0.2);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: none;
+}
+
+.menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-item {
+  padding: 6px 10px;
+  border-radius: 4px;
+  color: #a8c4c4;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.menu-item:hover {
+  background: rgba(123, 212, 208, 0.2);
+  color: #7bd4d0;
+}
+
+.folder-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 250ms ease, visibility 0s linear 250ms;
+}
+
+.folder-modal.open {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s;
+}
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.folder-modal .modal-content {
+  position: relative;
+  width: min(520px, 90vw);
+  max-height: 80vh;
+  background: rgba(23, 25, 28, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(123, 212, 208, 0.2);
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  transform: scale(0.95) translateY(8px);
+  transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.folder-modal.open .modal-content {
+  transform: scale(1) translateY(0);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #eef0f3;
+}
+
+.modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.modal-app-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 150ms ease;
+  text-align: center;
+}
+
+.modal-app-card:hover {
+  background: rgba(123, 212, 208, 0.1);
+}
+
+.modal-app-card span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #eef0f3;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-app-card .app-icon-wrap,
+.modal-app-card .app-icon,
+.modal-app-card .app-icon-fallback {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+.empty-msg {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #aeb4bc;
+  padding: 40px 0;
+  margin: 0;
+}
+
