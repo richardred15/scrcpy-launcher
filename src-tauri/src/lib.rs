@@ -83,7 +83,7 @@ struct Settings {
     #[serde(default)]
     device_display_bounds: HashMap<String, String>,
     #[serde(default)]
-        wireless_devices: Vec<String>,
+    wireless_devices: Vec<String>,
     #[serde(default)]
     folders: HashMap<String, Folder>,
 }
@@ -474,8 +474,7 @@ fn find_adaptive_icon_xml(cd_data: &[u8]) -> Option<ParsedIconEntry> {
             cd_data[pos + 42..pos + 46].try_into().ok()?,
         ));
         if pos + 46 + name_len <= cd_data.len() {
-            let filename =
-                std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
+            let filename = std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
             let lower = filename.to_lowercase();
             if lower.contains("anydpi") && lower.contains("ic_launcher") && lower.ends_with(".xml")
             {
@@ -504,21 +503,21 @@ fn parse_adaptive_icon_xml(xml_data: &[u8]) -> Option<(String, String)> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
-                if e.name().as_ref() == b"foreground" || e.name().as_ref() == b"background" {
-                    let is_fg = e.name().as_ref() == b"foreground";
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"drawable"
-                            || attr.key.as_ref() == b"{http://schemas.android.com/apk/res/android}drawable"
-                        {
-                            let val = std::str::from_utf8(&attr.value).ok()?;
-                            // Strip leading @drawable/ or @mipmap/ etc.
-                            let name = val.rsplit('/').next()?;
-                            if is_fg {
-                                foreground = Some(name.to_string());
-                            } else {
-                                background = Some(name.to_string());
-                            }
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if e.name().as_ref() == b"foreground" || e.name().as_ref() == b"background" =>
+            {
+                let is_fg = e.name().as_ref() == b"foreground";
+                for attr in e.attributes().flatten() {
+                    if attr.key.as_ref() == b"drawable"
+                        || attr.key.as_ref()
+                            == b"{http://schemas.android.com/apk/res/android}drawable"
+                    {
+                        let val = std::str::from_utf8(&attr.value).ok()?;
+                        let name = val.rsplit('/').next()?;
+                        if is_fg {
+                            foreground = Some(name.to_string());
+                        } else {
+                            background = Some(name.to_string());
                         }
                     }
                 }
@@ -594,10 +593,7 @@ fn find_drawable_entry(cd_data: &[u8], drawable_name: &str) -> Option<ParsedIcon
     best
 }
 
-fn composite_adaptive_icon(
-    foreground: &[u8],
-    background: &[u8],
-) -> Option<Vec<u8>> {
+fn composite_adaptive_icon(foreground: &[u8], background: &[u8]) -> Option<Vec<u8>> {
     use image::GenericImageView;
     let fg = image::load_from_memory(foreground).ok()?;
     let bg = image::load_from_memory(background).ok()?;
@@ -731,10 +727,10 @@ fn is_icon_filename(filename: &str) -> bool {
         && (lower.ends_with(".png") || lower.ends_with(".webp"))
         && !lower.contains("_foreground")
         && !lower.contains("_background"))
-    || (lower.starts_with("res/")
-        && lower.contains("ic_launcher")
-        && lower.ends_with(".xml")
-        && lower.contains("anydpi"))
+        || (lower.starts_with("res/")
+            && lower.contains("ic_launcher")
+            && lower.ends_with(".xml")
+            && lower.contains("anydpi"))
 }
 
 fn icon_score(filename: &str) -> i32 {
@@ -913,12 +909,9 @@ fn extract_icon_adb(settings: &Settings, serial: &str, package_name: &str) -> Op
     if let Some(ref entry) = icon_entry {
         eprintln!(
             "[scrcpy-launcher] icon: found '{}' (compression={}, size={}, data_start={})",
-            entry.filename,
-            entry.compression_method,
-            entry.compressed_size,
-            entry.data_start
+            entry.filename, entry.compression_method, entry.compressed_size, entry.data_start
         );
-        let data = pull_entry(settings, serial, &apk_path, entry, &engine)?;
+        let data = pull_entry(settings, serial, apk_path, entry, &engine)?;
         let mime = if entry.filename.ends_with(".png") {
             "image/png"
         } else if entry.filename.ends_with(".webp") {
@@ -931,35 +924,27 @@ fn extract_icon_adb(settings: &Settings, serial: &str, package_name: &str) -> Op
             data.len(),
             mime
         );
-        return Some(format!(
-            "data:{};base64,{}",
-            mime,
-            engine.encode(&data)
-        ));
+        return Some(format!("data:{};base64,{}", mime, engine.encode(&data)));
     }
 
     // Fall back to adaptive icon extraction
-    eprintln!(
-        "[scrcpy-launcher] icon: no standard icon, trying adaptive icon for {package_name}"
-    );
+    eprintln!("[scrcpy-launcher] icon: no standard icon, trying adaptive icon for {package_name}");
     let xml_entry = find_adaptive_icon_xml(cd_data)?;
     eprintln!(
         "[scrcpy-launcher] icon: found adaptive icon XML '{}'",
         xml_entry.filename
     );
-    let xml_data = pull_entry(settings, serial, &apk_path, &xml_entry, &engine)?;
+    let xml_data = pull_entry(settings, serial, apk_path, &xml_entry, &engine)?;
 
     let (fg_name, bg_name) = parse_adaptive_icon_xml(&xml_data)?;
-    eprintln!(
-        "[scrcpy-launcher] icon: adaptive layers: fg={fg_name}, bg={bg_name}"
-    );
+    eprintln!("[scrcpy-launcher] icon: adaptive layers: fg={fg_name}, bg={bg_name}");
 
     // Find the best foreground/background drawables in the CD
     let fg_entry = find_drawable_entry(cd_data, &fg_name)?;
     let bg_entry = find_drawable_entry(cd_data, &bg_name)?;
 
-    let fg_data = pull_entry(settings, serial, &apk_path, &fg_entry, &engine)?;
-    let bg_data = pull_entry(settings, serial, &apk_path, &bg_entry, &engine)?;
+    let fg_data = pull_entry(settings, serial, apk_path, &fg_entry, &engine)?;
+    let bg_data = pull_entry(settings, serial, apk_path, &bg_entry, &engine)?;
 
     let composited = composite_adaptive_icon(&fg_data, &bg_data)?;
     eprintln!(
@@ -1114,16 +1099,14 @@ struct RefreshFlag(Arc<AtomicBool>);
 fn get_open_apps_list() -> Vec<String> {
     let mut open_apps = Vec::new();
     if let Ok(mut children) = CHILDREN.lock() {
-        children.retain(|key, child| {
-            match child.try_wait() {
-                Ok(None) => {
-                    if !key.starts_with("__mirror__") {
-                        open_apps.push(key.clone());
-                    }
-                    true
+        children.retain(|key, child| match child.try_wait() {
+            Ok(None) => {
+                if !key.starts_with("__mirror__") {
+                    open_apps.push(key.clone());
                 }
-                _ => false,
+                true
             }
+            _ => false,
         });
     }
     open_apps
@@ -1201,16 +1184,23 @@ fn create_folder(app: tauri::AppHandle, name: String) -> Result<String, String> 
 }
 
 #[tauri::command]
-fn add_app_to_folder(app: tauri::AppHandle, folder_id: String, package_name: String) -> Result<(), String> {
+fn add_app_to_folder(
+    app: tauri::AppHandle,
+    folder_id: String,
+    package_name: String,
+) -> Result<(), String> {
     let settings = read_settings(&app);
     let mut new_settings = settings.clone();
     if !new_settings.folders.contains_key(&folder_id) {
         if folder_id == "favorites" {
-            new_settings.folders.insert(folder_id.clone(), Folder {
-                id: folder_id.clone(),
-                name: "Favorites".into(),
-                apps: Vec::new(),
-            });
+            new_settings.folders.insert(
+                folder_id.clone(),
+                Folder {
+                    id: folder_id.clone(),
+                    name: "Favorites".into(),
+                    apps: Vec::new(),
+                },
+            );
         } else {
             return Err("Folder not found".into());
         }
@@ -1228,7 +1218,11 @@ fn add_app_to_folder(app: tauri::AppHandle, folder_id: String, package_name: Str
 }
 
 #[tauri::command]
-fn remove_app_from_folder(app: tauri::AppHandle, folder_id: String, package_name: String) -> Result<(), String> {
+fn remove_app_from_folder(
+    app: tauri::AppHandle,
+    folder_id: String,
+    package_name: String,
+) -> Result<(), String> {
     let settings = read_settings(&app);
     let mut new_settings = settings.clone();
     if let Some(folder) = new_settings.folders.get_mut(&folder_id) {
@@ -1283,8 +1277,8 @@ fn get_settings(app: tauri::AppHandle) -> Settings {
 #[tauri::command]
 fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<Settings, String> {
     let path = settings_path(&app)?;
-    let contents =
-        serde_json::to_string_pretty(&settings).map_err(|err| format!("Unable to serialize settings: {err}"))?;
+    let contents = serde_json::to_string_pretty(&settings)
+        .map_err(|err| format!("Unable to serialize settings: {err}"))?;
     fs::write(path, contents).map_err(|err| format!("Unable to save settings: {err}"))?;
     Ok(settings)
 }
@@ -1549,8 +1543,7 @@ fn save_wireless_device(app: tauri::AppHandle, host_port: String) -> Result<Stri
     let path = settings_path(&app).map_err(|e| format!("Cannot get settings path: {e}"))?;
     let contents =
         serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
-    fs::write(&path, contents)
-        .map_err(|e| format!("Write error: {e}"))?;
+    fs::write(&path, contents).map_err(|e| format!("Write error: {e}"))?;
     Ok(host_port)
 }
 
@@ -1568,8 +1561,7 @@ fn remove_wireless_device(app: tauri::AppHandle, host_port: String) -> Result<St
     let path = settings_path(&app).map_err(|e| format!("Cannot get settings path: {e}"))?;
     let contents =
         serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
-    fs::write(&path, contents)
-        .map_err(|e| format!("Write error: {e}"))?;
+    fs::write(&path, contents).map_err(|e| format!("Write error: {e}"))?;
     Ok(host_port)
 }
 
