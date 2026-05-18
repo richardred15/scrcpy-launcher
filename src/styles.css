@@ -110,7 +110,6 @@ button {
 .brand p,
 .panel-head p,
 .empty p,
-.package-name,
 .pill small,
 .device-chip small {
   color: #aeb4bc;
@@ -150,10 +149,16 @@ button {
   background: #48bb78;
 }
 
-.pill.bad .dot,
-.device-chip.warning svg {
-  color: #f56565;
+.pill.bad .dot {
   background: #f56565;
+}
+
+.device-chip.warning .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #f56565;
+  flex-shrink: 0;
 }
 
 .device-chip,
@@ -370,14 +375,6 @@ svg {
   white-space: nowrap;
 }
 
-.package-name {
-  overflow: hidden;
-  font-size: 11px;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  white-space: nowrap;
-}
-
 .launch-message {
   overflow: hidden;
   color: #fbd38d;
@@ -484,6 +481,12 @@ svg {
   transform: translateX(0);
   visibility: visible;
   transition-delay: 0s;
+}
+
+.settings-desc {
+  color: #aeb4bc;
+  font-size: 13px;
+  margin: 0;
 }
 
 .settings-scroll {

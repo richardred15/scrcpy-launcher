@@ -7,7 +7,6 @@ import {
     BatteryFull,
     BatteryLow,
     BatteryMedium,
-    Cable,
     MonitorSmartphone,
     Play,
     RefreshCw,
@@ -160,11 +159,6 @@ function initials(label: string): string {
     );
 }
 
-function prettyLabel(packageName: string): string {
-    const tail = packageName.split(".").pop() || packageName;
-    return tail.replace(/([a-z])([A-Z])/g, "$1 $2");
-}
-
 function selectedDevice(): Device | undefined {
     return state.devices.find(
         (device) => device.serial === state.selectedSerial,
@@ -246,7 +240,7 @@ function renderDeviceSelect(): string {
     }
 
     if (state.devices.length === 0) {
-        return `<div class="device-chip warning"><i data-lucide="cable"></i><span>No devices</span></div>`;
+        return `<div class="device-chip warning"><span class="dot"></span><span>No devices</span></div>`;
     }
 
     if (state.devices.length === 1) {
@@ -412,12 +406,9 @@ function createAppCardElement(item: AndroidApp): HTMLButtonElement {
         btn.classList.add("has-message", message.kind);
     }
 
-    const showPackage = item.label === prettyLabel(item.packageName);
-
     btn.innerHTML = `
     ${renderAppIcon(item)}
     <span class="app-name">${highlightText(item.label, state.query)}</span>
-    ${showPackage ? `<span class="package-name">${highlightText(item.packageName, state.query)}</span>` : ""}
     ${message ? `<span class="launch-message">${shellEscapeText(message.text)}</span>` : ""}
   `;
 
@@ -441,21 +432,6 @@ function updateCardElement(card: HTMLElement, item: AndroidApp): void {
     const nameEl = card.querySelector(".app-name");
     if (nameEl && nameEl.innerHTML !== highlightText(item.label, state.query)) {
         nameEl.innerHTML = highlightText(item.label, state.query);
-    }
-
-    const showPackage = item.label === prettyLabel(item.packageName);
-    const pkgEl = card.querySelector(".package-name");
-    if (showPackage) {
-        if (!pkgEl) {
-            const span = document.createElement("span");
-            span.className = "package-name";
-            span.innerHTML = highlightText(item.packageName, state.query);
-            nameEl?.after(span);
-        } else if (pkgEl.innerHTML !== highlightText(item.packageName, state.query)) {
-            pkgEl.innerHTML = highlightText(item.packageName, state.query);
-        }
-    } else {
-        pkgEl?.remove();
     }
 
     const oldMsg = card.querySelector(".launch-message");
@@ -702,6 +678,7 @@ function updateStickyState(): void {
 function renderSettings(): string {
     if (!state.settings) return "";
     return `
+        <p class="settings-desc">Point the launcher at your local Android tools.</p>
         <label class="field">
           <span>ADB path</span>
           <input id="adbPath" value="${shellEscapeText(state.settings.adbPath)}" placeholder="adb" />
@@ -804,7 +781,7 @@ function renderIcons() {
         createIcons({
             icons: {
                 Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium,
-                Cable, MonitorSmartphone, Play, RefreshCw, Search, Server,
+                MonitorSmartphone, Play, RefreshCw, Search, Server,
                 Settings, Smartphone, Wifi, X,
             },
         });
@@ -883,6 +860,14 @@ function renderContextMenu(): void {
     menu.style.display = "block";
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
+    menu.style.transform = "none";
+    const { offsetWidth, offsetHeight } = menu;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const flipX = x + offsetWidth > vw;
+    const flipY = y + offsetHeight > vh;
+    if (flipX) menu.style.left = `${Math.max(4, x - offsetWidth)}px`;
+    if (flipY) menu.style.top = `${Math.max(4, y - offsetHeight)}px`;
 
     const folders = Object.values(state.folders);
     const folderOptions = folders
@@ -1024,10 +1009,7 @@ function initShell(): void {
       <div class="scrim" id="closeSettings"></div>
       <aside class="settings-panel" id="settings-panel" aria-label="Settings">
         <div class="panel-head">
-          <div>
-            <h2>Settings</h2>
-            <p>Point the launcher at your local Android tools.</p>
-          </div>
+          <h2>Settings</h2>
           <button class="icon-button" id="settingsX" title="Close settings"><i data-lucide="x"></i></button>
         </div>
         <div class="settings-scroll" id="settings-scroll"></div>

@@ -1,18 +1,21 @@
 # scrcpy Launcher
 
-Launch Android apps as separate desktop windows via scrcpy virtual displays.
-
-Built with Tauri 2 + Rust + Vanilla TypeScript. No Electron, no heavyweight framework.
+Launch Android apps as separate desktop windows via scrcpy virtual displays. Built with Tauri 2 + Rust + vanilla TypeScript.
 
 ## Features
 
-- **One click per app** — lists all launcher-enabled packages from a connected Android device
-- **Multiple desktops** — each app opens in its own resizable scrcpy window
-- **Smart focus** — clicking a running app focuses its existing window (kdotool on KDE Wayland, xdotool fallback on X11)
+- **One-click launch** — browse and launch all launcher-enabled apps from a connected Android device
+- **Smart focus** — clicking a running app focuses its existing window instead of launching a duplicate
+- **Desktop folders** — organize apps into named folders with an Android-style modal picker; favorites are a built-in folder
+- **Notification badges** — unread counts shown as red badges on app cards, polled from the device every 30s
+- **Wireless ADB** — connect to devices over the network with separate IP/port inputs; remembers saved devices
+- **Adaptive icons** — extracts and composites foreground/background layers from APKs for Samsung and other adaptive-icon apps
 - **Web metadata** — resolves app names and icons from Google Play / F-Droid with ADB fallback; caches results to disk
-- **Single instance** — no duplicate scrcpy processes for the same app
+- **Search** — real-time filter with debounce; searches both app names and package names
+- **Device info** — battery level, temperature, model, and Android version shown in the top bar
+- **Context menu** — right-click any app to add/remove from favorites or move to a folder
 - **Custom binary paths** — configure adb and scrcpy locations in the settings panel
-- **Flexible virtual display** — opt-in `--flex-display` for scrcpy ≥4.0
+- **Flexible virtual display** — optional `--flex-display` for scrcpy ≥4.0
 - **Kill-on-close** — optionally terminate all scrcpy children when the launcher exits
 
 ## Requirements
@@ -72,82 +75,33 @@ scoop install adb scrcpy
 1. Enable **USB debugging** on your Android device
 2. Connect the device and authorize the connection
 3. Launch scrcpy-launcher — it auto-detects the device and lists installed apps
-4. Click any app card to open it in a new scrcpy window
-5. Click the card again while the window is open to focus it
+4. **Click** any app card to open it in a new scrcpy window; click again to focus
+5. **Right-click** an app to add it to Favorites or an existing folder, or create a new folder
+6. **Search** by app name or package name with the search bar
 
-The settings panel lets you:
+For wireless connections, click the Wi-Fi button in the top bar, enter the device IP (port defaults to 5555), and press Enter or click Connect. The launcher remembers saved devices for quick reconnect.
+
+The settings panel (gear icon) lets you:
 - Point to custom adb/scrcpy binaries
-- Toggle system package visibility
-- Enable flexible virtual display (scrcpy ≥4.0)
+- Toggle system package visibility, flexible display, and kill-on-close
 - Choose icon source (generated placeholders or web metadata)
-- Toggle kill-on-close behaviour
+- Set virtual display bounds
+- Manage saved wireless devices
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────┐
-│                  Tauri 2 (Rust)                  │
-│                                                  │
-│  launch_app                                      │
-│    ├─ Child::try_wait() ── liveness check        │
-│    ├─ scrcpy --new-display --start-app           │
-│    └─ focus_window(pid)  (on background thread)  │
-│         ├─ kdotool search --pid windowactivate   │
-│         └─ xdotool search --pid windowactivate   │
-│                                                  │
-│  resolve_app_batch  (background thread)          │
-│    ├─ Google Play scrape  (rate-limited)         │
-│    ├─ F-Droid scrape      (rate-limited)         │
-│    └─ ADB icon extraction (ZIP EOCD parsing)     │
-│                                                  │
-│  WindowTracker  (managed Tauri state)            │
-│    └─ HashMap<pkg, Child> + Drop cleanup         │
-└─────────────────────────────────────────────────┘
-         │                      ▲
-         │ Tauri commands/events│
-         ▼                      │
-┌─────────────────────────────────────────────────┐
-│                Frontend (Vanilla TS)             │
-│                                                  │
-│  Layered rendering:                              │
-│    1. Instant grid from pretty_label             │
-│    2. Merge disk cache on mount                  │
-│    3. Fire-and-forget resolve batch              │
-│    4. Update cards via app-meta-resolved events  │
-└─────────────────────────────────────────────────┘
-```
+The Rust backend manages device communication (ADB), scrcpy process lifecycle, and a background worker that resolves app metadata (names, icons) through a waterfall: on-disk cache → Google Play scrape → F-Droid scrape → APK icon extraction. Results stream to the frontend as per-app events so the grid appears instantly and updates in-place.
 
-### Focus mechanism
-
-On KDE Wayland, the launcher uses **kdotool** which invokes KWin's scripting D-Bus API (`org.kde.kwin.Scripting.loadScript`). On X11, it falls back to **xdotool** (`search --pid windowactivate`). Both run on a background thread so the UI never blocks.
-
-A previous iteration used raw `wayland-client` with `dlopen` and then direct `zbus` D-Bus calls, but these were replaced with kdotool for simplicity and reliability.
-
-### Metadata resolution
-
-App names and icons are resolved lazily (never block startup):
-1. Instant: show `pretty_label` (derived from package name)
-2. Fast: fill from on-disk cache
-3. Background: scrape Google Play → F-Droid → ADB icon extraction
-4. Per-app Tauri events update individual cards in-place
-
-## Development
-
-```sh
-npm install
-npm run tauri:dev      # hot-reload frontend + Rust backend
-npm run tauri build    # release binary in src-tauri/target/release
-npm run build          # frontend only
-```
+The frontend is a vanilla TypeScript SPA with a layered rendering pipeline: instant grid from package data, merge cached metadata on mount, then fire-and-forget batch resolution for uncached apps. Window focus uses kdotool on KDE Wayland with an xdotool fallback on X11, both running on background threads.
 
 ## Configuration
 
-Settings are persisted to `$XDG_CONFIG_HOME/scrcpy-launcher/settings.json` (Linux) or the equivalent OS-specific path.
+Settings are persisted to the OS config directory (`~/.config/dev.scrcpy-launcher/` on Linux). App metadata and icons are cached in `~/.cache/dev.scrcpy-launcher/`.
 
 ## Known limitations
 
-- **Windows support**: not yet implemented (needs winapi `SetForegroundWindow` for focus)
-- **Samsung API 36+**: `dumpsys package` no longer emits `application-label:`, making web scraping the only source of correct app names for Samsung OneUI 7 devices
-- **Split APKs**: `pm path` returns multiple lines — only the base APK is used for icon extraction
-- **System app icons**: Samsung system apps (Messaging, Camera) use OneUI adaptive icons from the system theme, not bundled PNGs, so they fall through to the coloured-circle fallback
-- **scrcpy version**: `--flex-display` requires scrcpy ≥4.0
+- **Windows support** — not yet implemented (needs `SetForegroundWindow` for focus)
+- **Samsung API 36+** — `dumpsys package` no longer emits `application-label:`, making web scraping the only source of correct app names on OneUI 7
+- **Split APKs** — only the base APK is used for icon extraction
+- **Samsung system icons** — some system apps only define adaptive icon XMLs with no bundled PNGs; the launcher composites them from extracted layers
+- **scrcpy ≥4.0** required for `--flex-display`
