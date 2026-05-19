@@ -64,12 +64,8 @@ pub fn request(pkg: &str) -> CacheAction {
         return CacheAction::Pending(rx);
     }
     let (tx, _rx) = mpsc::channel();
-    mgr.pending.insert(
-        pkg.to_string(),
-        PendingEntry {
-            waiters: vec![tx],
-        },
-    );
+    mgr.pending
+        .insert(pkg.to_string(), PendingEntry { waiters: vec![tx] });
     CacheAction::Resolve
 }
 

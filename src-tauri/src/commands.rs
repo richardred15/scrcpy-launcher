@@ -17,7 +17,11 @@ use crate::web::{download_icon_as_data_url, rate_limit, scrape_fdroid, scrape_go
 // ── Folder Management ───────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn create_folder(app: tauri::AppHandle, serial: String, name: String) -> Result<String, String> {
+pub fn create_folder(
+    app: tauri::AppHandle,
+    serial: String,
+    name: String,
+) -> Result<String, String> {
     let settings = read_settings(&app);
     let id = uuid::Uuid::new_v4().to_string();
     let folder = Folder {
@@ -556,9 +560,7 @@ pub fn launch_mirror_multi(
         match launch_mirror_inner(&app, &settings, serial) {
             Ok(result) => results.push(result),
             Err(e) => {
-                eprintln!(
-                    "[scrcpy-launcher] launch_mirror_multi: {serial} failed: {e}"
-                );
+                eprintln!("[scrcpy-launcher] launch_mirror_multi: {serial} failed: {e}");
                 results.push(LaunchResult {
                     used_flex_display: false,
                     message: Some(e),
