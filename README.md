@@ -9,7 +9,7 @@
 
 Launch Android apps as separate desktop windows via scrcpy virtual displays. Built with Tauri 2 + Rust + vanilla TypeScript.
 
-[![Screenshot](https://i.imgur.com/nBvYtFD.png)](https://imgur.com/a/ThhThzk)
+[![Screenshot](docs/screenshots/latest.png)](docs/screenshots/latest.png)
 
 ## Features
 

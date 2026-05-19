@@ -65,7 +65,7 @@ function renderDeviceCard(device: Device): string {
         ? `<i data-lucide="wifi" class="device-wifi"></i>`
         : "";
     const batteryHtml = device.batteryLevel !== undefined
-        ? `<span class="device-badge">${batteryIcon(device.batteryLevel)} ${device.batteryLevel}%${device.batteryCharging ? ' <i data-lucide="battery-charging"></i>' : ''}</span>`
+        ? `<span class="device-badge">${device.batteryCharging ? '<i data-lucide="battery-charging"></i>' : batteryIcon(device.batteryLevel)} ${device.batteryLevel}%</span>`
         : "";
     const tempHtml = device.batteryTemperature !== undefined
         ? `<span class="device-badge">${device.batteryTemperature.toFixed(1)}°C</span>`
@@ -89,11 +89,10 @@ function renderDeviceCard(device: Device): string {
 export function renderBatteryPill(): string {
     const device = selectedDevice();
     if (!device || device.batteryLevel === undefined) return "";
-    const icon = batteryIcon(device.batteryLevel);
-    const charging = device.batteryCharging
+    const icon = device.batteryCharging
         ? `<i data-lucide="battery-charging"></i>`
-        : "";
-    return `<div class="pill" title="Battery">${icon} ${device.batteryLevel}% ${charging}</div>`;
+        : batteryIcon(device.batteryLevel);
+    return `<div class="pill" title="Battery">${icon} ${device.batteryLevel}%</div>`;
 }
 
 export function renderTempPill(): string {
