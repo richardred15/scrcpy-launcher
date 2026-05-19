@@ -23,6 +23,7 @@ vi.mock("lucide", () => ({
     Server: "i",
     Settings: "i",
     Smartphone: "i",
+    Trash2: "i",
     Wifi: "i",
     X: "i",
 }));

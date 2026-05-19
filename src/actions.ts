@@ -11,6 +11,8 @@ import {
     updateControlRow,
     updateOpenStatus,
     updateNotificationBadges,
+    updateFolderModal,
+    openFolder,
     renderContextMenu,
     closeCreateFolderModal,
     openCreateFolderModal,
@@ -31,6 +33,41 @@ export async function fetchNotificationCounts(): Promise<void> {
 
 export function deviceFolders(): Record<string, Folder> {
     return state.folders[state.selectedSerial] ?? {};
+}
+
+export async function removeFromFolder(folderId: string, pkg: string): Promise<void> {
+    const serial = state.selectedSerial;
+    if (!serial) return;
+    try {
+        await invoke("remove_app_from_folder", { serial, folderId, packageName: pkg });
+        const folders = deviceFolders();
+        const folder = folders[folderId];
+        if (folder) {
+            folder.apps = folder.apps.filter(p => p !== pkg);
+        }
+        updateAppGrid();
+        updateFolderModal();
+    } catch (e: any) {
+        state.error = String(e);
+        updateErrorBanner();
+    }
+}
+
+export async function deleteFolder(folderId: string): Promise<void> {
+    const serial = state.selectedSerial;
+    if (!serial) return;
+    const folderName = deviceFolders()[folderId]?.name;
+    try {
+        await invoke("delete_folder", { serial, folderId });
+        delete state.folders[serial]?.[folderId];
+        if (state.currentFolderId === folderId) {
+            openFolder(null);
+        }
+        updateAppGrid();
+    } catch (e: any) {
+        state.error = String(e);
+        updateErrorBanner();
+    }
 }
 
 export async function addToFolder(folderId: string, pkg: string): Promise<void> {

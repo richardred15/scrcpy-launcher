@@ -46,6 +46,8 @@ import {
     confirmCreateFolder,
     createFolderPrompt,
     addToFolder,
+    removeFromFolder,
+    deleteFolder,
     closeSettings,
     loadSettings,
     loadWirelessDevices,
@@ -56,6 +58,23 @@ export function setupEventDelegation(): void {
 
     app.addEventListener("contextmenu", (event) => {
         const target = event.target as HTMLElement;
+
+        const folderCard = target.closest("[data-folder-id]");
+        if (folderCard && !folderCard.closest("[data-package]")) {
+            event.preventDefault();
+            const id = (folderCard as HTMLElement).dataset.folderId!;
+            const devFolders = state.folders[state.selectedSerial] ?? {};
+            const name = devFolders[id]?.name ?? "folder";
+            state.contextMenu = {
+                x: event.clientX,
+                y: event.clientY,
+                folderId: id,
+                folderName: name,
+            };
+            renderContextMenu();
+            return;
+        }
+
         const card = target.closest("[data-package]");
         if (card) {
             event.preventDefault();
@@ -83,6 +102,12 @@ export function setupEventDelegation(): void {
                 } else if (action === "add-to-folder") {
                     const folderId = item.getAttribute("data-folder-id")!;
                     void addToFolder(folderId, pkgValue);
+                } else if (action === "remove-from-folder") {
+                    const folderId = item.getAttribute("data-folder-id")!;
+                    if (folderId) void removeFromFolder(folderId, pkgValue);
+                } else if (action === "delete-folder") {
+                    const folderId = item.getAttribute("data-folder-id")!;
+                    if (folderId) void deleteFolder(folderId);
                 }
                 state.contextMenu = null;
                 renderContextMenu();
@@ -107,6 +132,21 @@ export function setupEventDelegation(): void {
         if ((event.target as HTMLElement).closest("#closeFolderModal") || 
             (event.target as HTMLElement).classList.contains("modal-overlay")) {
             openFolder(null);
+            return;
+        }
+
+        const removeApp = (event.target as HTMLElement).closest("[data-remove-app]");
+        if (removeApp) {
+            const pkg = (removeApp as HTMLElement).dataset.removeApp!;
+            const id = state.currentFolderId;
+            if (id) void removeFromFolder(id, pkg);
+            return;
+        }
+
+        const delFolder = (event.target as HTMLElement).closest("#deleteFolderBtn");
+        if (delFolder) {
+            const id = state.currentFolderId;
+            if (id) void deleteFolder(id);
             return;
         }
 

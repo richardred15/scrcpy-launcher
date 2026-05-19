@@ -22,6 +22,7 @@ import {
     Server,
     Settings,
     Smartphone,
+    Trash2,
     Wifi,
     X,
 } from "lucide";
@@ -293,14 +294,18 @@ export function updateFolderModal(): void {
     content.innerHTML = `
         <div class="modal-head">
             <h2>${shellEscapeText(title)}</h2>
-            <button class="icon-button" id="closeFolderModal" title="Close"><i data-lucide="x"></i></button>
+            <div class="modal-head-actions">
+                ${id !== "favorites" ? `<button class="icon-button" id="deleteFolderBtn" title="Delete folder"><i data-lucide="trash-2"></i></button>` : ""}
+                <button class="icon-button" id="closeFolderModal" title="Close"><i data-lucide="x"></i></button>
+            </div>
         </div>
         <div class="modal-grid">
             ${apps.length > 0 
                 ? apps.map(app => `
-                    <div class="modal-app-card" data-launch="${app.packageName}">
+                    <div class="modal-app-card" data-package="${app.packageName}" data-launch="${app.packageName}">
                         ${renderAppIcon(app)}
                         <span>${shellEscapeText(app.label)}</span>
+                        <button class="icon-button tiny" data-remove-app="${app.packageName}" title="Remove from folder"><i data-lucide="x"></i></button>
                     </div>
                 `).join("")
                 : '<p class="empty-msg">No apps in this folder</p>'
@@ -558,7 +563,7 @@ export function renderIcons() {
             icons: {
                 Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium,
                 MonitorSmartphone, Play, RefreshCw, Search, Server,
-                Settings, Smartphone, Wifi, X,
+                Settings, Smartphone, Trash2, Wifi, X,
             },
         });
     } catch (error) {
@@ -630,7 +635,7 @@ export function renderContextMenu(): void {
         return;
     }
 
-    const { x, y, pkg } = state.contextMenu;
+    const { x, y, pkg, folderId, folderName } = state.contextMenu;
     menu.style.display = "block";
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
@@ -643,6 +648,20 @@ export function renderContextMenu(): void {
     if (flipX) menu.style.left = `${Math.max(4, x - offsetWidth)}px`;
     if (flipY) menu.style.top = `${Math.max(4, y - offsetHeight)}px`;
 
+    // Folder-level context menu (right-click on a folder card)
+    if (folderId && !pkg) {
+        menu.innerHTML = `
+        <div class="menu-group">
+            <div class="menu-item" data-action="delete-folder" data-folder-id="${shellEscapeText(folderId)}">
+                <span>Delete ${shellEscapeText(folderName ?? "folder")}</span>
+            </div>
+        </div>`;
+        return;
+    }
+
+    if (!pkg) return;
+
+    const inFolder = state.currentFolderId && state.currentFolderId !== "favorites";
     const deviceFolders = state.folders[state.selectedSerial] ?? {};
     const folders = Object.values(deviceFolders);
     const folderOptions = folders
@@ -655,19 +674,25 @@ export function renderContextMenu(): void {
 
     const isFav = isFavorited(pkg);
 
-    menu.innerHTML = `
-        <div class="menu-group">
-            <div class="menu-item" data-action="add-to-folder" data-folder-id="favorites" data-pkg="${shellEscapeText(pkg)}">
-                <span>${isFav ? "Remove from" : "Add to"} Favorites</span>
-            </div>
-        </div>
-        <div class="menu-group">
-            <div class="menu-item" data-action="create-folder" data-pkg="${shellEscapeText(pkg)}">
-                <span>Create New Folder</span>
-            </div>
-            ${folderOptions}
-        </div>
-    `;
+    const parts: string[] = [];
+    parts.push(`<div class="menu-group">`);
+    parts.push(`<div class="menu-item" data-action="add-to-folder" data-folder-id="favorites" data-pkg="${shellEscapeText(pkg)}">`);
+    parts.push(`<span>${isFav ? "Remove from" : "Add to"} Favorites</span>`);
+    parts.push(`</div>`);
+    if (inFolder) {
+        parts.push(`<div class="menu-item" data-action="remove-from-folder" data-folder-id="${shellEscapeText(state.currentFolderId!)}" data-pkg="${shellEscapeText(pkg)}">`);
+        parts.push(`<span>Remove from this folder</span>`);
+        parts.push(`</div>`);
+    }
+    parts.push(`</div>`);
+    parts.push(`<div class="menu-group">`);
+    parts.push(`<div class="menu-item" data-action="create-folder" data-pkg="${shellEscapeText(pkg)}">`);
+    parts.push(`<span>Create New Folder</span>`);
+    parts.push(`</div>`);
+    parts.push(folderOptions);
+    parts.push(`</div>`);
+
+    menu.innerHTML = parts.join("");
 }
 
 export function openCreateFolderModal(pkg: string): void {

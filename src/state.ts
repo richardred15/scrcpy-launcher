@@ -29,7 +29,7 @@ export type AppState = {
     focusedAppIndex: number | null;
     launchingPackage: string;
     launchMessages: Map<string, { kind: "info" | "error"; text: string }>;
-    contextMenu: { x: number; y: number; pkg: string } | null;
+    contextMenu: { x: number; y: number; pkg?: string; folderId?: string; folderName?: string } | null;
     notificationCounts: Record<string, number>;
     createFolderPkg: string;
 };
