@@ -54,41 +54,35 @@ export function renderDeviceSelect(): string {
         return `<div class="device-chip warning"><span class="dot"></span><span>No devices</span></div>`;
     }
 
-    if (state.devices.length === 1) {
-        const device = state.devices[0];
-        const name = device.model || device.serial;
-        const wirelessIcon = device.wireless
-            ? `<i data-lucide="wifi" class="device-wifi"></i>`
-            : "";
-        const disconnectBtn = device.wireless
-            ? `<button class="icon-button tiny" data-disconnect="${shellEscapeText(device.serial)}" title="Disconnect"><i data-lucide="x"></i></button>`
-            : "";
-        return `<button type="button" class="device-chip clickable" title="${shellEscapeText(`${name} · ${device.serial}`)}"><i data-lucide="smartphone"></i><span>${shellEscapeText(name)}</span>${wirelessIcon}${disconnectBtn}</button>`;
-    }
+    return `<div class="device-cards">${state.devices.map(d => renderDeviceCard(d)).join("")}</div>`;
+}
 
+function renderDeviceCard(device: Device): string {
+    const isSelected = device.serial === state.selectedSerial;
+    const name = device.model || device.serial;
+    const wirelessIcon = device.wireless
+        ? `<i data-lucide="wifi" class="device-wifi"></i>`
+        : "";
+    const batteryHtml = device.batteryLevel !== undefined
+        ? `<span class="device-badge">${batteryIcon(device.batteryLevel)} ${device.batteryLevel}%${device.batteryCharging ? ' <i data-lucide="battery-charging"></i>' : ''}</span>`
+        : "";
+    const tempHtml = device.batteryTemperature !== undefined
+        ? `<span class="device-badge">${device.batteryTemperature.toFixed(1)}°C</span>`
+        : "";
+    const disconnectBtn = device.wireless
+        ? `<button class="icon-button tiny" data-disconnect="${shellEscapeText(device.serial)}" title="Disconnect"><i data-lucide="x"></i></button>`
+        : "";
+    const cls = isSelected ? "device-card selected" : "device-card";
     return `
-    <label class="device-select">
+    <div class="${cls}" data-serial="${shellEscapeText(device.serial)}">
       <i data-lucide="smartphone"></i>
-      <select id="deviceSelect" aria-label="Select Android device">
-        ${state.devices
-            .map((device) => {
-                const name = `${device.model || device.serial}${device.androidVersion ? ` · Android ${device.androidVersion}` : ""}`;
-                const wirelessIcon = device.wireless
-                    ? `<i data-lucide="wifi" class="device-wifi"></i>`
-                    : "";
-                return `<option value="${shellEscapeText(device.serial)}" ${device.serial === state.selectedSerial ? "selected" : ""}>${shellEscapeText(name)}${wirelessIcon}</option>`;
-            })
-            .join("")}
-      </select>
-      ${state.devices
-          .filter((d) => d.wireless)
-          .map(
-              (device) =>
-                  `<button class="icon-button tiny" data-disconnect="${shellEscapeText(device.serial)}" title="Disconnect"><i data-lucide="x"></i></button>`,
-          )
-          .join("")}
-    </label>
-  `;
+      <span class="device-card-name">${shellEscapeText(name)}</span>
+      ${wirelessIcon}
+      ${batteryHtml}
+      ${tempHtml}
+      <button class="icon-button tiny" data-mirror="${shellEscapeText(device.serial)}" title="Mirror"><i data-lucide="monitor-smartphone"></i></button>
+      ${disconnectBtn}
+    </div>`;
 }
 
 export function renderBatteryPill(): string {
@@ -287,7 +281,8 @@ export function updateFolderModal(): void {
     let apps: AndroidApp[] = [];
     let title = "";
 
-    const folder = state.folders[id];
+    const deviceFolders = state.folders[state.selectedSerial] ?? {};
+    const folder = deviceFolders[id];
     if (folder) {
         title = folder.name;
         apps = id === "favorites"
@@ -415,7 +410,8 @@ export function updateAppGrid(): void {
 
     const fragment = document.createDocumentFragment();
 
-    Object.values(state.folders).forEach(folder => {
+    const deviceFolders = state.folders[state.selectedSerial] ?? {};
+    Object.values(deviceFolders).forEach(folder => {
         fragment.appendChild(createFolderElement(folder));
     });
 
@@ -430,28 +426,18 @@ export function updateAppGrid(): void {
 }
 
 export function updateControlRow(): void {
-    const chip = document.querySelector<HTMLElement>(
-        ".device-chip:not(.muted):not(.warning)",
-    );
-    if (chip) {
+    const card = document.querySelector<HTMLElement>(".device-card.selected");
+    if (card) {
         const device = selectedDevice();
         if (device) {
             const base = device.androidVersion
                 ? `${device.model || device.serial} · Android ${device.androidVersion} · ${device.serial}`
                 : device.serial;
             const queue = state.resolveQueue.size;
-            chip.title = `${base} · ${state.apps.length} apps${queue ? ` (resolving ${queue}…)` : ""}`;
+            card.title = `${base} · ${state.apps.length} apps${queue ? ` (resolving ${queue}…)` : ""}`;
         }
     }
     renderIcons();
-    const selectWrap = document.querySelector<HTMLElement>(".device-select");
-    if (selectWrap) {
-        const device = selectedDevice();
-        if (device) {
-            const queue = state.resolveQueue.size;
-            selectWrap.title = `${state.apps.length} apps${queue ? ` (resolving ${queue}…)` : ""}`;
-        }
-    }
 }
 
 export function updateStickyState(): void {
@@ -593,8 +579,6 @@ export function updateTopBar(): void {
     container.innerHTML = `
         ${state.tools ? renderStatusPill(state.tools.adb, "ADB") + renderStatusPill(state.tools.scrcpy, "scrcpy") : ""}
         ${renderDeviceSelect()}
-        ${renderBatteryPill()}
-        ${renderTempPill()}
         <button class="icon-button" id="adbRestart" title="Restart ADB server"><i data-lucide="server"></i></button>
         <button class="icon-button" id="wirelessConnect" title="Connect wireless ADB device"><i data-lucide="wifi"></i></button>
         <button class="icon-button" id="reload" title="Rescan apps and devices"><i data-lucide="refresh-cw"></i></button>
@@ -659,7 +643,8 @@ export function renderContextMenu(): void {
     if (flipX) menu.style.left = `${Math.max(4, x - offsetWidth)}px`;
     if (flipY) menu.style.top = `${Math.max(4, y - offsetHeight)}px`;
 
-    const folders = Object.values(state.folders);
+    const deviceFolders = state.folders[state.selectedSerial] ?? {};
+    const folders = Object.values(deviceFolders);
     const folderOptions = folders
         .filter(f => f.id !== "favorites")
         .map(f => `

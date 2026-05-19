@@ -1,23 +1,23 @@
 use std::collections::HashMap;
 use std::fs;
 use std::process::{Command, Stdio};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use tauri::Emitter;
 
 use crate::adb::{adb_shell, scrcpy_supports_display_bounds, scrcpy_supports_flex_display};
+use crate::cache::{self, CacheAction};
 use crate::icon::extract_icon_adb;
 use crate::platform::{app_desktop_write, focus_window, save_app_icon, scrcpy_app_id};
 use crate::runtime::{ACTIVE_APP_IDS, CHILDREN};
-use crate::settings::{read_metadata_cache, read_settings, write_metadata_cache};
+use crate::settings::read_settings;
 use crate::types::{AppMetaResolvedEvent, CachedAppMeta, Folder, LaunchResult, Settings};
 use crate::web::{download_icon_as_data_url, rate_limit, scrape_fdroid, scrape_google_play};
 
 // ── Folder Management ───────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn create_folder(app: tauri::AppHandle, name: String) -> Result<String, String> {
+pub fn create_folder(app: tauri::AppHandle, serial: String, name: String) -> Result<String, String> {
     let settings = read_settings(&app);
     let id = uuid::Uuid::new_v4().to_string();
     let folder = Folder {
@@ -26,7 +26,11 @@ pub fn create_folder(app: tauri::AppHandle, name: String) -> Result<String, Stri
         apps: Vec::new(),
     };
     let mut new_settings = settings.clone();
-    new_settings.folders.insert(id.clone(), folder);
+    new_settings
+        .folders
+        .entry(serial)
+        .or_default()
+        .insert(id.clone(), folder);
     let path = crate::settings::settings_path(&app)
         .map_err(|e| format!("Cannot get settings path: {e}"))?;
     let contents =
@@ -38,14 +42,16 @@ pub fn create_folder(app: tauri::AppHandle, name: String) -> Result<String, Stri
 #[tauri::command]
 pub fn add_app_to_folder(
     app: tauri::AppHandle,
+    serial: String,
     folder_id: String,
     package_name: String,
 ) -> Result<(), String> {
     let settings = read_settings(&app);
     let mut new_settings = settings.clone();
-    if !new_settings.folders.contains_key(&folder_id) {
+    let device_folders = new_settings.folders.entry(serial).or_default();
+    if !device_folders.contains_key(&folder_id) {
         if folder_id == "favorites" {
-            new_settings.folders.insert(
+            device_folders.insert(
                 folder_id.clone(),
                 Folder {
                     id: folder_id.clone(),
@@ -57,7 +63,7 @@ pub fn add_app_to_folder(
             return Err("Folder not found".into());
         }
     }
-    if let Some(folder) = new_settings.folders.get_mut(&folder_id) {
+    if let Some(folder) = device_folders.get_mut(&folder_id) {
         if !folder.apps.contains(&package_name) {
             folder.apps.push(package_name);
         }
@@ -73,13 +79,18 @@ pub fn add_app_to_folder(
 #[tauri::command]
 pub fn remove_app_from_folder(
     app: tauri::AppHandle,
+    serial: String,
     folder_id: String,
     package_name: String,
 ) -> Result<(), String> {
     let settings = read_settings(&app);
     let mut new_settings = settings.clone();
-    if let Some(folder) = new_settings.folders.get_mut(&folder_id) {
-        folder.apps.retain(|p| p != &package_name);
+    if let Some(device_folders) = new_settings.folders.get_mut(&serial) {
+        if let Some(folder) = device_folders.get_mut(&folder_id) {
+            folder.apps.retain(|p| p != &package_name);
+        } else {
+            return Err("Folder not found".into());
+        }
     } else {
         return Err("Folder not found".into());
     }
@@ -94,13 +105,18 @@ pub fn remove_app_from_folder(
 #[tauri::command]
 pub fn rename_folder(
     app: tauri::AppHandle,
+    serial: String,
     folder_id: String,
     new_name: String,
 ) -> Result<(), String> {
     let settings = read_settings(&app);
     let mut new_settings = settings.clone();
-    if let Some(folder) = new_settings.folders.get_mut(&folder_id) {
-        folder.name = new_name;
+    if let Some(device_folders) = new_settings.folders.get_mut(&serial) {
+        if let Some(folder) = device_folders.get_mut(&folder_id) {
+            folder.name = new_name;
+        } else {
+            return Err("Folder not found".into());
+        }
     } else {
         return Err("Folder not found".into());
     }
@@ -113,10 +129,18 @@ pub fn rename_folder(
 }
 
 #[tauri::command]
-pub fn delete_folder(app: tauri::AppHandle, folder_id: String) -> Result<(), String> {
+pub fn delete_folder(
+    app: tauri::AppHandle,
+    serial: String,
+    folder_id: String,
+) -> Result<(), String> {
     let settings = read_settings(&app);
     let mut new_settings = settings.clone();
-    if new_settings.folders.remove(&folder_id).is_none() {
+    if let Some(device_folders) = new_settings.folders.get_mut(&serial) {
+        if device_folders.remove(&folder_id).is_none() {
+            return Err("Folder not found".into());
+        }
+    } else {
         return Err("Folder not found".into());
     }
     let path = crate::settings::settings_path(&app)
@@ -144,16 +168,8 @@ pub fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<Settin
 }
 
 #[tauri::command]
-pub fn get_cached_app_meta(app: tauri::AppHandle) -> HashMap<String, CachedAppMeta> {
-    read_metadata_cache(&app)
-}
-
-#[tauri::command]
-pub fn prune_cache(app: tauri::AppHandle, pkgs: Vec<String>) -> Result<(), String> {
-    let mut cache = read_metadata_cache(&app);
-    cache.retain(|k, _| pkgs.contains(k));
-    write_metadata_cache(&app, &cache);
-    Ok(())
+pub fn get_cached_app_meta() -> HashMap<String, CachedAppMeta> {
+    cache::snapshot()
 }
 
 // ── Resolve batch ────────────────────────────────────────────────────────────
@@ -165,7 +181,6 @@ pub fn resolve_app_batch(
     pkgs: Vec<String>,
 ) -> Result<(), String> {
     let settings = read_settings(&app_handle);
-    let cache = Arc::new(std::sync::Mutex::new(read_metadata_cache(&app_handle)));
 
     if pkgs.is_empty() {
         return Ok(());
@@ -177,7 +192,6 @@ pub fn resolve_app_batch(
         let mut handles = Vec::with_capacity(num_workers);
 
         for worker_id in 0..num_workers {
-            let cache = Arc::clone(&cache);
             let app_handle = app_handle.clone();
             let settings = settings.clone();
             let serial = serial.clone();
@@ -192,9 +206,8 @@ pub fn resolve_app_batch(
                 while idx < pkgs.len() {
                     let pkg = &pkgs[idx];
 
-                    {
-                        let cache_lock = cache.lock().unwrap();
-                        if let Some(meta) = cache_lock.get(pkg) {
+                    match cache::request(pkg) {
+                        CacheAction::Cached(meta) => {
                             let _ = app_handle.emit(
                                 "app-meta-resolved",
                                 AppMetaResolvedEvent {
@@ -206,6 +219,21 @@ pub fn resolve_app_batch(
                             idx += num_workers;
                             continue;
                         }
+                        CacheAction::Pending(rx) => {
+                            if let Ok(meta) = rx.recv_timeout(Duration::from_secs(60)) {
+                                let _ = app_handle.emit(
+                                    "app-meta-resolved",
+                                    AppMetaResolvedEvent {
+                                        package_name: pkg.clone(),
+                                        label: meta.label,
+                                        icon_url: meta.icon_data_url,
+                                    },
+                                );
+                            }
+                            idx += num_workers;
+                            continue;
+                        }
+                        CacheAction::Resolve => {}
                     }
 
                     eprintln!(
@@ -226,10 +254,7 @@ pub fn resolve_app_batch(
                                     .unwrap_or_default()
                                     .as_secs(),
                             };
-                            {
-                                let mut cache_lock = cache.lock().unwrap();
-                                cache_lock.insert(pkg.clone(), meta);
-                            }
+                            cache::store(pkg.clone(), meta.clone());
                             let _ = app_handle.emit(
                                 "app-meta-resolved",
                                 AppMetaResolvedEvent {
@@ -255,10 +280,7 @@ pub fn resolve_app_batch(
                                     .unwrap_or_default()
                                     .as_secs(),
                             };
-                            {
-                                let mut cache_lock = cache.lock().unwrap();
-                                cache_lock.insert(pkg.clone(), meta);
-                            }
+                            cache::store(pkg.clone(), meta.clone());
                             let _ = app_handle.emit(
                                 "app-meta-resolved",
                                 AppMetaResolvedEvent {
@@ -283,10 +305,7 @@ pub fn resolve_app_batch(
                                 .unwrap_or_default()
                                 .as_secs(),
                         };
-                        {
-                            let mut cache_lock = cache.lock().unwrap();
-                            cache_lock.insert(pkg.clone(), meta);
-                        }
+                        cache::store(pkg.clone(), meta.clone());
                         let _ = app_handle.emit(
                             "app-meta-resolved",
                             AppMetaResolvedEvent {
@@ -308,8 +327,7 @@ pub fn resolve_app_batch(
             }
         }
 
-        let final_cache = cache.lock().unwrap().clone();
-        write_metadata_cache(&app_handle, &final_cache);
+        cache::flush();
         let _ = app_handle.emit("app-meta-batch-complete", ());
     });
 
@@ -449,10 +467,12 @@ pub fn get_wireless_devices(app: tauri::AppHandle) -> Vec<String> {
 
 // ── Launch ───────────────────────────────────────────────────────────────────
 
-#[tauri::command]
-pub fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResult, String> {
+fn launch_mirror_inner(
+    _app: &tauri::AppHandle,
+    settings: &Settings,
+    serial: &str,
+) -> Result<LaunchResult, String> {
     let key = format!("__mirror__:{serial}");
-    let settings = read_settings(&app);
     let window_title = format!("scrcpy-launcher:mirror:{serial}");
     eprintln!("launch_mirror: serial={} title={}", serial, window_title);
 
@@ -474,18 +494,18 @@ pub fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResu
 
     let display_bounds = settings
         .device_display_bounds
-        .get(&serial)
+        .get(serial)
         .map(String::as_str)
         .or(if settings.display_bounds.is_empty() {
             None
         } else {
             Some(settings.display_bounds.as_str())
         });
-    let supports_bounds = display_bounds.is_some() && scrcpy_supports_display_bounds(&settings);
+    let supports_bounds = display_bounds.is_some() && scrcpy_supports_display_bounds(settings);
 
     let mut args = vec![
         "-s".to_string(),
-        serial,
+        serial.to_string(),
         "--window-title".to_string(),
         window_title,
     ];
@@ -517,6 +537,36 @@ pub fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResu
             Err(format!("Failed to launch scrcpy: {err}"))
         }
     }
+}
+
+#[tauri::command]
+pub fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResult, String> {
+    let settings = read_settings(&app);
+    launch_mirror_inner(&app, &settings, &serial)
+}
+
+#[tauri::command]
+pub fn launch_mirror_multi(
+    app: tauri::AppHandle,
+    serials: Vec<String>,
+) -> Result<Vec<LaunchResult>, String> {
+    let settings = read_settings(&app);
+    let mut results = Vec::with_capacity(serials.len());
+    for serial in &serials {
+        match launch_mirror_inner(&app, &settings, serial) {
+            Ok(result) => results.push(result),
+            Err(e) => {
+                eprintln!(
+                    "[scrcpy-launcher] launch_mirror_multi: {serial} failed: {e}"
+                );
+                results.push(LaunchResult {
+                    used_flex_display: false,
+                    message: Some(e),
+                });
+            }
+        }
+    }
+    Ok(results)
 }
 
 #[tauri::command]
@@ -563,7 +613,7 @@ pub fn launch_app(
     }
 
     let app_id = scrcpy_app_id(&package_name);
-    let cache = read_metadata_cache(&app);
+    let cache = cache::snapshot();
     let icon_path = cache
         .get(&package_name)
         .and_then(|meta| meta.icon_data_url.as_ref())

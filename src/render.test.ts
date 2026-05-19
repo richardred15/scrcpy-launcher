@@ -134,24 +134,27 @@ describe("renderDeviceSelect", () => {
         expect(html).toContain("No devices");
     });
 
-    it("shows button for single device", () => {
+    it("shows device card for single device with mirror button", () => {
         state.loadingDevices = false;
         state.devices = [{ serial: "abc", state: "device", model: "Pixel", wireless: false }];
         const html = renderDeviceSelect();
-        expect(html).toContain('class="device-chip clickable"');
+        expect(html).toContain("device-card");
         expect(html).toContain("Pixel");
+        expect(html).toContain('data-mirror="abc"');
     });
 
-    it("shows select for multiple devices", () => {
+    it("shows device cards for multiple devices", () => {
         state.loadingDevices = false;
         state.devices = [
             { serial: "abc", state: "device", model: "Pixel", wireless: false },
             { serial: "def", state: "device", model: "Nexus", wireless: true },
         ];
         const html = renderDeviceSelect();
-        expect(html).toContain("<select");
+        expect(html).toContain('class="device-cards"');
         expect(html).toContain("Pixel");
         expect(html).toContain("Nexus");
+        expect(html).toContain('data-mirror="abc"');
+        expect(html).toContain('data-mirror="def"');
     });
 });
 
@@ -322,7 +325,8 @@ describe("createAppCardElement", () => {
     });
 
     it("adds favorite class when app is favorited", () => {
-        state.folders["favorites"] = { id: "favorites", name: "Favorites", apps: ["com.test"] };
+        state.selectedSerial = "abc";
+        state.folders["abc"] = { favorites: { id: "favorites", name: "Favorites", apps: ["com.test"] } };
         const app: AndroidApp = { packageName: "com.test", label: "Test App" };
         const el = createAppCardElement(app);
         expect(el.classList.contains("favorite")).toBe(true);
@@ -393,7 +397,7 @@ describe("updateAppGrid", () => {
             { packageName: "com.a", label: "Alpha" },
             { packageName: "com.b", label: "Beta" },
         ];
-        state.folders["games"] = { id: "games", name: "Games", apps: ["com.a"] };
+        state.folders["abc"] = { games: { id: "games", name: "Games", apps: ["com.a"] } };
         updateAppGrid();
         expect(document.querySelector(".folder-card")).toBeTruthy();
         expect(document.querySelector(".app-card")).toBeTruthy();
@@ -451,7 +455,8 @@ describe("renderContextMenu", () => {
 
     it("shows menu with favorite toggle and folder options", () => {
         initDOM();
-        state.folders["games"] = { id: "games", name: "Games", apps: [] };
+        state.selectedSerial = "abc";
+        state.folders["abc"] = { games: { id: "games", name: "Games", apps: [] } };
         state.contextMenu = { x: 100, y: 100, pkg: "com.test" };
         renderContextMenu();
         const menu = document.getElementById("context-menu");
@@ -463,7 +468,8 @@ describe("renderContextMenu", () => {
 
     it("shows Remove from Favorites when already favorited", () => {
         initDOM();
-        state.folders["favorites"] = { id: "favorites", name: "Favorites", apps: ["com.test"] };
+        state.selectedSerial = "abc";
+        state.folders["abc"] = { favorites: { id: "favorites", name: "Favorites", apps: ["com.test"] } };
         state.contextMenu = { x: 100, y: 100, pkg: "com.test" };
         renderContextMenu();
         expect(document.getElementById("context-menu")?.innerHTML).toContain("Remove from Favorites");
@@ -498,8 +504,9 @@ describe("updateCardElement", () => {
 describe("openFolder / modals", () => {
     it("opens folder modal and shows apps", () => {
         initDOM();
+        state.selectedSerial = "abc";
         state.apps = [{ packageName: "com.a", label: "Alpha" }];
-        state.folders["test"] = { id: "test", name: "Test", apps: ["com.a"] };
+        state.folders["abc"] = { test: { id: "test", name: "Test", apps: ["com.a"] } };
         openFolder("test");
         const modal = document.getElementById("folder-modal");
         expect(modal?.classList.contains("open")).toBe(true);

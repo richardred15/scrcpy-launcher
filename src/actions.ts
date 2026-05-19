@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { state } from "./state";
-import type { AndroidApp, SettingsState, LaunchResult, CachedAppMeta } from "./types";
+import type { AndroidApp, Folder, SettingsState, LaunchResult, CachedAppMeta } from "./types";
 import { isFavorited } from "./utils";
 import {
     updateAppGrid,
@@ -29,21 +29,30 @@ export async function fetchNotificationCounts(): Promise<void> {
     }
 }
 
+export function deviceFolders(): Record<string, Folder> {
+    return state.folders[state.selectedSerial] ?? {};
+}
+
 export async function addToFolder(folderId: string, pkg: string): Promise<void> {
+    const serial = state.selectedSerial;
+    if (!serial) return;
     try {
         if (folderId === "favorites" && isFavorited(pkg)) {
-            await invoke("remove_app_from_folder", { folderId, packageName: pkg });
-            const folder = state.folders["favorites"];
+            await invoke("remove_app_from_folder", { serial, folderId, packageName: pkg });
+            const folders = deviceFolders();
+            const folder = folders["favorites"];
             if (folder) {
                 folder.apps = folder.apps.filter(p => p !== pkg);
             }
         } else {
-            await invoke("add_app_to_folder", { folderId, packageName: pkg });
-            const folder = state.folders[folderId];
+            await invoke("add_app_to_folder", { serial, folderId, packageName: pkg });
+            const folders = deviceFolders();
+            const folder = folders[folderId];
             if (folder && !folder.apps.includes(pkg)) {
                 folder.apps.push(pkg);
             } else if (folderId === "favorites") {
-                state.folders[folderId] = { id: folderId, name: "Favorites", apps: [pkg] };
+                state.folders[serial] = state.folders[serial] ?? {};
+                state.folders[serial][folderId] = { id: folderId, name: "Favorites", apps: [pkg] };
             }
         }
         updateAppGrid();
@@ -54,6 +63,8 @@ export async function addToFolder(folderId: string, pkg: string): Promise<void> 
 }
 
 export async function confirmCreateFolder(): Promise<void> {
+    const serial = state.selectedSerial;
+    if (!serial) return;
     const input = document.getElementById("createFolderName") as HTMLInputElement;
     const name = input?.value.trim();
     if (!name) {
@@ -63,8 +74,9 @@ export async function confirmCreateFolder(): Promise<void> {
     const pkg = state.createFolderPkg;
     closeCreateFolderModal();
     try {
-        const id = await invoke<string>("create_folder", { name });
-        state.folders[id] = { id, name, apps: [] };
+        const id = await invoke<string>("create_folder", { serial, name });
+        state.folders[serial] = state.folders[serial] ?? {};
+        state.folders[serial][id] = { id, name, apps: [] };
         state.contextMenu = null;
         renderContextMenu();
         await addToFolder(id, pkg);
@@ -321,6 +333,22 @@ export async function loadCachedMetaAndResolve(): Promise<void> {
 export async function launchMirror(serial: string): Promise<void> {
     try {
         await invoke("launch_mirror", { serial });
+    } catch (error) {
+        state.error = String(error);
+        updateErrorBanner();
+    }
+}
+
+export async function launchMirrorAll(): Promise<void> {
+    const serials = state.devices
+        .filter(d => d.state === "device")
+        .map(d => d.serial);
+    if (serials.length < 1) return;
+    if (serials.length === 1) {
+        return launchMirror(serials[0]);
+    }
+    try {
+        await invoke("launch_mirror_multi", { serials });
     } catch (error) {
         state.error = String(error);
         updateErrorBanner();

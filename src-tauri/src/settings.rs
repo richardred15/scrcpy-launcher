@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use tauri::Manager;
 
-use crate::types::{CachedAppMeta, Settings};
+use crate::types::Settings;
 
 pub fn default_settings() -> Settings {
     Settings {
@@ -19,7 +19,7 @@ pub fn default_settings() -> Settings {
         display_bounds: "540x960".into(),
         device_display_bounds: HashMap::new(),
         wireless_devices: Vec::new(),
-        folders: HashMap::new(),
+        folders: HashMap::new(), // HashMap<serial, HashMap<folder_id, Folder>>
     }
 }
 
@@ -69,24 +69,6 @@ pub fn cache_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     fs::create_dir_all(&dir).map_err(|err| format!("Unable to create cache directory: {err}"))?;
     dir.push("app_metadata_cache.json");
     Ok(dir)
-}
-
-pub fn read_metadata_cache(app: &tauri::AppHandle) -> HashMap<String, CachedAppMeta> {
-    let Ok(path) = cache_path(app) else {
-        return HashMap::new();
-    };
-    let Ok(contents) = fs::read_to_string(path) else {
-        return HashMap::new();
-    };
-    serde_json::from_str(&contents).unwrap_or_default()
-}
-
-pub fn write_metadata_cache(app: &tauri::AppHandle, cache: &HashMap<String, CachedAppMeta>) {
-    if let Ok(path) = cache_path(app) {
-        if let Ok(contents) = serde_json::to_string_pretty(cache) {
-            let _ = fs::write(path, contents);
-        }
-    }
 }
 
 #[cfg(test)]

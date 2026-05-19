@@ -16,7 +16,7 @@ export type SettingsState = {
     displayBounds: string;
     deviceDisplayBounds: Record<string, string>;
     wirelessDevices: string[];
-    folders: Record<string, Folder>;
+    folders: Record<string, Record<string, Folder>>;
 };
 
 export type BinaryStatus = {

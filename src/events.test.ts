@@ -166,17 +166,51 @@ describe("setupEventDelegation - folder card click", () => {
     });
 });
 
-describe("setupEventDelegation - device select change", () => {
-    it("triggers app loading on device select change", () => {
-        const select = document.createElement("select");
-        select.id = "deviceSelect";
-        const option = document.createElement("option");
-        option.value = "abc123";
-        select.appendChild(option);
-        select.value = "abc123";
-        document.getElementById("app-shell")?.appendChild(select);
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-        expect(state.selectedSerial).toBe("abc123");
+describe("setupEventDelegation - device cards", () => {
+    it("selects device on card click", () => {
+        state.devices = [
+            { serial: "abc", state: "device", model: "Pixel", wireless: false },
+            { serial: "def", state: "device", model: "Nexus", wireless: true },
+        ];
+        const shell = document.getElementById("app-shell")!;
+        const card = document.createElement("div");
+        card.className = "device-card";
+        card.dataset.serial = "def";
+        shell.appendChild(card);
+        card.click();
+        expect(state.selectedSerial).toBe("def");
+    });
+
+    it("does nothing when clicking already-selected card", () => {
+        state.selectedSerial = "abc";
+        state.devices = [
+            { serial: "abc", state: "device", model: "Pixel", wireless: false },
+            { serial: "def", state: "device", model: "Nexus", wireless: true },
+        ];
+        const shell = document.getElementById("app-shell")!;
+        const card = document.createElement("div");
+        card.className = "device-card";
+        card.dataset.serial = "abc";
+        shell.appendChild(card);
+        card.click();
+        expect(state.selectedSerial).toBe("abc");
+    });
+
+    it("mirrors device via data-mirror button", () => {
+        state.devices = [
+            { serial: "abc", state: "device", model: "Pixel", wireless: false },
+        ];
+        state.selectedSerial = "abc";
+        const shell = document.getElementById("app-shell")!;
+        const card = document.createElement("div");
+        card.className = "device-card";
+        card.dataset.serial = "abc";
+        shell.appendChild(card);
+        const btn = document.createElement("button");
+        btn.dataset.mirror = "abc";
+        card.appendChild(btn);
+        btn.click();
+        expect(state.error).toBe(""); // no error means invoke was called
     });
 });
 

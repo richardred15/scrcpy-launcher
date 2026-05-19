@@ -163,16 +163,19 @@ describe("selectedDevice", () => {
 
 describe("isFavorited", () => {
     it("returns true when pkg is in favorites folder", () => {
-        state.folders["favorites"] = { id: "favorites", name: "Favorites", apps: ["com.test.app"] };
+        state.selectedSerial = "abc";
+        state.folders["abc"] = { favorites: { id: "favorites", name: "Favorites", apps: ["com.test.app"] } };
         expect(isFavorited("com.test.app")).toBe(true);
     });
 
     it("returns false when pkg is not in favorites", () => {
-        state.folders["favorites"] = { id: "favorites", name: "Favorites", apps: ["com.other.app"] };
+        state.selectedSerial = "abc";
+        state.folders["abc"] = { favorites: { id: "favorites", name: "Favorites", apps: ["com.other.app"] } };
         expect(isFavorited("com.test.app")).toBe(false);
     });
 
     it("returns false when no favorites folder exists", () => {
+        state.selectedSerial = "abc";
         expect(isFavorited("com.test.app")).toBe(false);
     });
 });
@@ -186,16 +189,20 @@ describe("filteredApps", () => {
     ];
 
     it("excludes all folder apps when no query", () => {
+        state.selectedSerial = "abc";
         state.apps = apps;
-        state.folders["favorites"] = { id: "favorites", name: "Favorites", apps: ["com.alpha"] };
-        state.folders["games"] = { id: "games", name: "Games", apps: ["com.beta"] };
+        state.folders["abc"] = {
+            favorites: { id: "favorites", name: "Favorites", apps: ["com.alpha"] },
+            games: { id: "games", name: "Games", apps: ["com.beta"] },
+        };
         const result = filteredApps();
         expect(result.map(a => a.packageName)).toEqual(["com.delta", "com.gamma"]);
     });
 
     it("shows all apps when query is present", () => {
+        state.selectedSerial = "abc";
         state.apps = apps;
-        state.folders["favorites"] = { id: "favorites", name: "Favorites", apps: ["com.alpha"] };
+        state.folders["abc"] = { favorites: { id: "favorites", name: "Favorites", apps: ["com.alpha"] } };
         state.query = "a";
         const result = filteredApps();
         expect(result.length).toBeGreaterThanOrEqual(2);
@@ -223,8 +230,9 @@ describe("filteredApps", () => {
     });
 
     it("sorts favorites first during search", () => {
+        state.selectedSerial = "abc";
         state.apps = apps;
-        state.folders["favorites"] = { id: "favorites", name: "Favorites", apps: ["com.gamma"] };
+        state.folders["abc"] = { favorites: { id: "favorites", name: "Favorites", apps: ["com.gamma"] } };
         state.query = "app";
         const result = filteredApps();
         expect(result[0].packageName).toBe("com.gamma");

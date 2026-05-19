@@ -125,7 +125,7 @@ button {
 
 .pill,
 .device-chip,
-.device-select,
+.device-card,
 .search-box {
   display: inline-flex;
   align-items: center;
@@ -161,18 +161,8 @@ button {
   flex-shrink: 0;
 }
 
-.device-chip,
-.device-select {
+.device-chip {
   padding: 0 8px;
-}
-
-.device-chip.clickable {
-  cursor: pointer;
-}
-
-.device-chip.clickable:hover {
-  border-color: rgba(49, 151, 149, 0.85);
-  transform: translateY(-1px);
 }
 
 .device-chip.muted svg,
@@ -180,7 +170,39 @@ button {
   color: #aeb4bc;
 }
 
-.device-select select,
+.device-cards {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.device-card {
+  padding: 2px 8px;
+  gap: 4px;
+  cursor: default;
+}
+
+.device-card.selected {
+  border-color: rgba(49, 151, 149, 0.6);
+  background: rgba(49, 151, 149, 0.1);
+}
+
+.device-card:hover {
+  border-color: rgba(49, 151, 149, 0.85);
+}
+
+.device-card-name {
+  font-weight: 500;
+}
+
+.device-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
 .field select,
 .field input,
 .search-box input {
@@ -188,10 +210,6 @@ button {
   outline: 0;
   color: #eef0f3;
   background: transparent;
-}
-
-.device-select select {
-  max-width: 270px;
 }
 
 .icon-button {
@@ -715,8 +733,8 @@ code {
 }
 
 .device-chip .icon-button.tiny,
-.device-select .icon-button.tiny {
-  margin-left: 4px;
+.device-card .icon-button.tiny {
+  margin-left: 2px;
   padding: 2px;
   width: 20px;
   height: 20px;
@@ -724,7 +742,7 @@ code {
 }
 
 .device-chip .icon-button.tiny:hover,
-.device-select .icon-button.tiny:hover {
+.device-card .icon-button.tiny:hover {
   opacity: 1;
 }
 

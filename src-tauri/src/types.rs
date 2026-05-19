@@ -31,7 +31,7 @@ pub struct Settings {
     #[serde(default)]
     pub wireless_devices: Vec<String>,
     #[serde(default)]
-    pub folders: HashMap<String, Folder>,
+    pub folders: HashMap<String, HashMap<String, Folder>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

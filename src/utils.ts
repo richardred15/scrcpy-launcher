@@ -27,14 +27,16 @@ export function selectedDevice(): Device | undefined {
 }
 
 export function isFavorited(pkg: string): boolean {
-    return state.folders["favorites"]?.apps.includes(pkg) ?? false;
+    const deviceFolders = state.folders[state.selectedSerial] ?? {};
+    return (deviceFolders["favorites"]?.apps.includes(pkg)) ?? false;
 }
 
 export function filteredApps(): AndroidApp[] {
     const query = state.query.trim().toLowerCase();
 
+    const deviceFolders = state.folders[state.selectedSerial] ?? {};
     const allFolderApps = new Set<string>();
-    Object.values(state.folders).forEach(f => {
+    Object.values(deviceFolders).forEach(f => {
         f.apps.forEach(pkg => allFolderApps.add(pkg));
     });
 

@@ -24,7 +24,7 @@ export type AppState = {
     wirelessConnectMsg: string;
     wirelessDevices: string[];
     openApps: Set<string>;
-    folders: Record<string, Folder>;
+    folders: Record<string, Record<string, Folder>>;
     currentFolderId: string | null;
     focusedAppIndex: number | null;
     launchingPackage: string;

@@ -202,10 +202,20 @@ export function setupEventDelegation(): void {
             return;
         }
 
-        const chip = target.closest(".device-chip:not(.muted):not(.warning)");
-        if (chip) {
-            const device = selectedDevice();
-            if (device) void launchMirror(device.serial);
+        const mirrorBtn = target.closest("[data-mirror]");
+        if (mirrorBtn) {
+            const serial = (mirrorBtn as HTMLElement).dataset.mirror!;
+            void launchMirror(serial);
+            return;
+        }
+
+        const deviceCard = target.closest(".device-card");
+        if (deviceCard) {
+            const serial = (deviceCard as HTMLElement).dataset.serial!;
+            if (serial !== state.selectedSerial) {
+                state.selectedSerial = serial;
+                beginLoadApps(serial);
+            }
             return;
         }
 
@@ -243,14 +253,6 @@ export function setupEventDelegation(): void {
             if (searchInput) searchInput.value = "";
             updateAppGrid();
             return;
-        }
-    });
-
-    app.addEventListener("change", (event) => {
-        const select = event.target as HTMLSelectElement;
-        if (select.id === "deviceSelect") {
-            state.selectedSerial = select.value;
-            beginLoadApps(state.selectedSerial);
         }
     });
 
@@ -474,9 +476,7 @@ export async function init(): Promise<void> {
         await listen("app-meta-batch-complete", () => {
             state.resolveQueue.clear();
             updateControlRow();
-            const installedPkgs = state.apps.map((a) => a.packageName);
-            invoke("prune_cache", { pkgs: installedPkgs }).catch(() => {});
-            console.log("[meta] batch complete, cache pruned");
+            console.log("[meta] batch complete");
         });
 
         invoke("trigger_refresh");

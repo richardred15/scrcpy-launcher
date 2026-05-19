@@ -74,38 +74,43 @@ describe("fetchNotificationCounts", () => {
 
 describe("addToFolder", () => {
     it("removes from favorites when already favorited", async () => {
-        state.folders["favorites"] = { id: "favorites", name: "Favorites", apps: ["com.test"] };
+        state.selectedSerial = "abc";
+        state.folders["abc"] = { favorites: { id: "favorites", name: "Favorites", apps: ["com.test"] } };
         vi.mocked(invoke).mockResolvedValue(undefined);
         await addToFolder("favorites", "com.test");
-        expect(invoke).toHaveBeenCalledWith("remove_app_from_folder", { folderId: "favorites", packageName: "com.test" });
-        expect(state.folders["favorites"]?.apps).not.toContain("com.test");
+        expect(invoke).toHaveBeenCalledWith("remove_app_from_folder", { serial: "abc", folderId: "favorites", packageName: "com.test" });
+        expect(state.folders["abc"]?.favorites?.apps).not.toContain("com.test");
         expect(mockRender.updateAppGrid).toHaveBeenCalled();
     });
 
     it("adds to favorites when not favorited", async () => {
-        state.folders["favorites"] = { id: "favorites", name: "Favorites", apps: [] };
+        state.selectedSerial = "abc";
+        state.folders["abc"] = { favorites: { id: "favorites", name: "Favorites", apps: [] } };
         vi.mocked(invoke).mockResolvedValue(undefined);
         await addToFolder("favorites", "com.test");
-        expect(invoke).toHaveBeenCalledWith("add_app_to_folder", { folderId: "favorites", packageName: "com.test" });
-        expect(state.folders["favorites"]?.apps).toContain("com.test");
+        expect(invoke).toHaveBeenCalledWith("add_app_to_folder", { serial: "abc", folderId: "favorites", packageName: "com.test" });
+        expect(state.folders["abc"]?.favorites?.apps).toContain("com.test");
     });
 
     it("auto-creates favorites folder on first add", async () => {
+        state.selectedSerial = "abc";
         vi.mocked(invoke).mockResolvedValue(undefined);
         await addToFolder("favorites", "com.test");
-        expect(state.folders["favorites"]).toBeDefined();
-        expect(state.folders["favorites"]?.apps).toEqual(["com.test"]);
+        expect(state.folders["abc"]?.["favorites"]).toBeDefined();
+        expect(state.folders["abc"]?.["favorites"]?.apps).toEqual(["com.test"]);
     });
 
     it("adds to regular folder", async () => {
-        state.folders["games"] = { id: "games", name: "Games", apps: [] };
+        state.selectedSerial = "abc";
+        state.folders["abc"] = { games: { id: "games", name: "Games", apps: [] } };
         vi.mocked(invoke).mockResolvedValue(undefined);
         await addToFolder("games", "com.game");
-        expect(invoke).toHaveBeenCalledWith("add_app_to_folder", { folderId: "games", packageName: "com.game" });
-        expect(state.folders["games"]?.apps).toContain("com.game");
+        expect(invoke).toHaveBeenCalledWith("add_app_to_folder", { serial: "abc", folderId: "games", packageName: "com.game" });
+        expect(state.folders["abc"]?.games?.apps).toContain("com.game");
     });
 
     it("handles error", async () => {
+        state.selectedSerial = "abc";
         vi.mocked(invoke).mockRejectedValue("Failed");
         await addToFolder("favorites", "com.test");
         expect(mockRender.updateErrorBanner).toHaveBeenCalled();
@@ -115,6 +120,7 @@ describe("addToFolder", () => {
 
 describe("confirmCreateFolder", () => {
     it("validates non-empty name", async () => {
+        state.selectedSerial = "abc";
         document.body.innerHTML = `<input id="createFolderName" value="" />`;
         state.createFolderPkg = "com.test";
         await confirmCreateFolder();
@@ -122,12 +128,13 @@ describe("confirmCreateFolder", () => {
     });
 
     it("creates folder and adds app", async () => {
+        state.selectedSerial = "abc";
         document.body.innerHTML = `<input id="createFolderName" value="My Games" />`;
         state.createFolderPkg = "com.test";
         vi.mocked(invoke).mockResolvedValueOnce("new-folder-id").mockResolvedValueOnce(undefined);
         await confirmCreateFolder();
-        expect(invoke).toHaveBeenCalledWith("create_folder", { name: "My Games" });
-        expect(state.folders["new-folder-id"]).toEqual({ id: "new-folder-id", name: "My Games", apps: ["com.test"] });
+        expect(invoke).toHaveBeenCalledWith("create_folder", { serial: "abc", name: "My Games" });
+        expect(state.folders["abc"]?.["new-folder-id"]).toEqual({ id: "new-folder-id", name: "My Games", apps: ["com.test"] });
         expect(mockRender.closeCreateFolderModal).toHaveBeenCalled();
     });
 });
@@ -294,7 +301,7 @@ describe("loadSettings", () => {
             displayBounds: "",
             deviceDisplayBounds: {},
             wirelessDevices: [],
-            folders: { games: { id: "games", name: "Games", apps: ["com.a"] } },
+            folders: { "abc": { games: { id: "games", name: "Games", apps: ["com.a"] } } },
         };
         vi.mocked(invoke).mockResolvedValue(settings);
         await loadSettings();

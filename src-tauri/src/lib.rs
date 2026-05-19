@@ -1,4 +1,5 @@
 mod adb;
+mod cache;
 mod commands;
 mod icon;
 mod platform;
@@ -60,6 +61,7 @@ pub fn run() {
             commands::delete_folder,
             commands::launch_app,
             commands::launch_mirror,
+            commands::launch_mirror_multi,
             commands::adb_connect,
             commands::adb_disconnect,
             commands::adb_restart_server,
@@ -69,12 +71,12 @@ pub fn run() {
             commands::get_cached_app_meta,
             commands::resolve_app_batch,
             commands::get_notification_counts,
-            commands::prune_cache,
             worker::get_open_apps,
             worker::trigger_refresh,
             worker::trigger_load_apps,
         ])
         .setup(move |a| {
+            cache::init(a.handle());
             let app_handle = a.handle().clone();
             let flag = Arc::new(AtomicBool::new(false));
             a.manage(RefreshFlag(flag.clone()));
