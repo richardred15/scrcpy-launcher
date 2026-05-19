@@ -231,8 +231,8 @@ pub fn is_scrcpy_downloaded() -> bool {
 pub fn download_scrcpy() -> Result<(), String> {
     let url = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest";
     let resp = ureq::get(url)
-        .set_header("Accept", "application/json")
-        .set_header("User-Agent", "scrcpy-launcher")
+        .header("Accept", "application/json")
+        .header("User-Agent", "scrcpy-launcher")
         .call()
         .map_err(|e| format!("Failed to fetch release info: {e}"))?;
     let json_str = resp
@@ -249,7 +249,7 @@ pub fn download_scrcpy() -> Result<(), String> {
         "https://github.com/Genymobile/scrcpy/releases/download/{tag}/scrcpy-win64-{tag}.zip"
     );
     let resp = ureq::get(&zip_url)
-        .set_header("User-Agent", "scrcpy-launcher")
+        .header("User-Agent", "scrcpy-launcher")
         .call()
         .map_err(|e| format!("Failed to download scrcpy: {e}"))?;
     let zip_bytes = resp
