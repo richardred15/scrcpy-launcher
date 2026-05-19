@@ -42,12 +42,22 @@ Launch Android apps as separate desktop windows via scrcpy virtual displays. Bui
 - Rust toolchain (Cargo)
 - Linux: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`
 
+## Releases
+
+Pre-built packages are attached to each release. Download the latest from the [releases page](https://github.com/richardred15/scrcpy-launcher/releases/latest).
+
+| Format | File |
+|--------|------|
+| Debian / Ubuntu | `scrcpy-launcher_*.deb` |
+| Fedora / RHEL | `scrcpy-launcher-*.rpm` |
+| Windows | `scrcpy-launcher_*.msi` or `*.exe` (NSIS installer) |
+
 ## Installation
 
 ### From source
 
 ```sh
-git clone https://github.com/your-username/scrcpy-launcher
+git clone https://github.com/richardred15/scrcpy-launcher
 cd scrcpy-launcher
 npm install
 cargo install kdotool                    # KDE Wayland window focus
