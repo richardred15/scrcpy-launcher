@@ -367,6 +367,21 @@ export async function loadCachedMetaAndResolve(): Promise<void> {
     });
 }
 
+export async function installScrcpyWindows(): Promise<void> {
+    const btn = document.getElementById("installScrcpyWindows") as HTMLButtonElement | null;
+    if (btn) btn.disabled = true;
+    try {
+        state.settings = await invoke<SettingsState>("install_scrcpy_windows");
+        updateTopBar();
+        updateSettings();
+    } catch (e) {
+        state.error = String(e);
+        updateErrorBanner();
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 export async function launchMirror(serial: string): Promise<void> {
     try {
         await invoke("launch_mirror", { serial });

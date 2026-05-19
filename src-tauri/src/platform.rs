@@ -207,3 +207,81 @@ pub fn register_desktop_file() {
         .status()
         .ok();
 }
+
+pub fn scrcpy_dir() -> PathBuf {
+    let exe = std::env::current_exe().unwrap_or_default();
+    let dir = exe.parent().unwrap_or(std::path::Path::new("."));
+    let out = dir.join("scrcpy");
+    let _ = fs::create_dir_all(&out);
+    out
+}
+
+pub fn is_scrcpy_downloaded() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        scrcpy_dir().join("scrcpy.exe").exists()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn download_scrcpy() -> Result<(), String> {
+    use std::io::Read;
+
+    let url = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest";
+    let resp = ureq::get(url)
+        .set("Accept", "application/json")
+        .set("User-Agent", "scrcpy-launcher")
+        .call()
+        .map_err(|e| format!("Failed to fetch release info: {e}"))?;
+    let json: serde_json::Value =
+        serde_json::from_reader(resp.into_reader()).map_err(|e| format!("Bad JSON: {e}"))?;
+    let tag = json["tag_name"]
+        .as_str()
+        .ok_or_else(|| "Missing tag_name".to_string())?;
+
+    let zip_url = format!(
+        "https://github.com/Genymobile/scrcpy/releases/download/{tag}/scrcpy-win64-{tag}.zip"
+    );
+    let resp = ureq::get(&zip_url)
+        .set("User-Agent", "scrcpy-launcher")
+        .call()
+        .map_err(|e| format!("Failed to download scrcpy: {e}"))?;
+    let mut zip_bytes = Vec::new();
+    resp.into_reader()
+        .read_to_end(&mut zip_bytes)
+        .map_err(|e| format!("Failed to read zip: {e}"))?;
+
+    let cursor = std::io::Cursor::new(zip_bytes);
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("Failed to open zip: {e}"))?;
+    let out_dir = scrcpy_dir();
+
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Zip entry {i}: {e}"))?;
+        let name = file.name().to_string();
+        let outpath = out_dir.join(&name);
+        if file.is_dir() {
+            let _ = fs::create_dir_all(&outpath);
+        } else {
+            if let Some(p) = outpath.parent() {
+                let _ = fs::create_dir_all(p);
+            }
+            let mut outfile =
+                fs::File::create(&outpath).map_err(|e| format!("Create {name}: {e}"))?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| format!("Extract {name}: {e}"))?;
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn download_scrcpy() -> Result<(), String> {
+    Err("This command is only available on Windows".into())
+}

@@ -74,6 +74,7 @@ pub fn run() {
             worker::get_open_apps,
             worker::trigger_refresh,
             worker::trigger_load_apps,
+            commands::install_scrcpy_windows,
         ])
         .setup(move |a| {
             cache::init(a.handle());

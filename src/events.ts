@@ -51,6 +51,7 @@ import {
     closeSettings,
     loadSettings,
     loadWirelessDevices,
+    installScrcpyWindows,
 } from "./actions";
 
 export function setupEventDelegation(): void {
@@ -284,6 +285,11 @@ export function setupEventDelegation(): void {
 
         if (target.closest("#showGuide")) {
             showConnectionGuide();
+            return;
+        }
+
+        if (target.closest("#installScrcpyWindows")) {
+            void installScrcpyWindows();
             return;
         }
 

@@ -8,7 +8,7 @@ use tauri::Emitter;
 use crate::adb::{adb_shell, scrcpy_supports_display_bounds, scrcpy_supports_flex_display};
 use crate::cache::{self, CacheAction};
 use crate::icon::extract_icon_adb;
-use crate::platform::{app_desktop_write, focus_window, save_app_icon, scrcpy_app_id};
+use crate::platform::{app_desktop_write, focus_window, save_app_icon, scrcpy_app_id, scrcpy_dir};
 use crate::runtime::{ACTIVE_APP_IDS, CHILDREN};
 use crate::settings::read_settings;
 use crate::types::{AppMetaResolvedEvent, CachedAppMeta, Folder, LaunchResult, Settings};
@@ -168,6 +168,23 @@ pub fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<Settin
     let contents = serde_json::to_string_pretty(&settings)
         .map_err(|err| format!("Unable to serialize settings: {err}"))?;
     fs::write(path, contents).map_err(|err| format!("Unable to save settings: {err}"))?;
+    Ok(settings)
+}
+
+#[tauri::command]
+pub fn install_scrcpy_windows(app: tauri::AppHandle) -> Result<Settings, String> {
+    if !crate::platform::is_scrcpy_downloaded() {
+        crate::platform::download_scrcpy()?;
+    }
+    let scrcpy_exe = scrcpy_dir().join("scrcpy.exe");
+    let adb_exe = scrcpy_dir().join("adb.exe");
+    let mut settings = read_settings(&app);
+    settings.scrcpy_path = scrcpy_exe.to_string_lossy().to_string();
+    settings.adb_path = adb_exe.to_string_lossy().to_string();
+    let path = crate::settings::settings_path(&app)?;
+    let contents =
+        serde_json::to_string_pretty(&settings).map_err(|e| format!("Serialize error: {e}"))?;
+    fs::write(path, contents).map_err(|e| format!("Save error: {e}"))?;
     Ok(settings)
 }
 

@@ -25,6 +25,7 @@ import {
     Trash2,
     Wifi,
     X,
+    Download,
 } from "lucide";
 
 export function renderStatusPill(binary: BinaryStatus, label: string): string {
@@ -561,7 +562,7 @@ export function renderIcons() {
         createIcons({
             icons: {
                 Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium,
-                MonitorSmartphone, Play, RefreshCw, Search, Server,
+                Download, MonitorSmartphone, Play, RefreshCw, Search, Server,
                 Settings, Smartphone, Trash2, Wifi, X,
             },
         });
@@ -788,6 +789,12 @@ export function initShell(): void {
               <li>Connect your phone to this PC via USB</li>
               <li>Accept the RSA authorization prompt on your phone screen</li>
             </ol>
+            <div id="scrcpy-win-download" style="display:none">
+              <hr />
+              <button class="empty-button primary" id="installScrcpyWindows">
+                <i data-lucide="download"></i> Download scrcpy + ADB for Windows
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -803,6 +810,10 @@ export function initShell(): void {
     }
 
     renderIcons();
+    const winDownload = document.getElementById("scrcpy-win-download");
+    if (winDownload) {
+        winDownload.style.display = navigator.userAgent.includes("Windows") ? "" : "none";
+    }
     updateShellDeviceSerial();
     updateTopBar();
     updateWirelessForm();
