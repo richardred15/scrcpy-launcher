@@ -229,16 +229,18 @@ pub fn is_scrcpy_downloaded() -> bool {
 
 #[cfg(target_os = "windows")]
 pub fn download_scrcpy() -> Result<(), String> {
-    use std::io::Read;
-
     let url = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest";
     let resp = ureq::get(url)
-        .set("Accept", "application/json")
-        .set("User-Agent", "scrcpy-launcher")
+        .set_header("Accept", "application/json")
+        .set_header("User-Agent", "scrcpy-launcher")
         .call()
         .map_err(|e| format!("Failed to fetch release info: {e}"))?;
+    let json_str = resp
+        .into_body()
+        .read_to_string()
+        .map_err(|e| format!("Bad response: {e}"))?;
     let json: serde_json::Value =
-        serde_json::from_reader(resp.into_reader()).map_err(|e| format!("Bad JSON: {e}"))?;
+        serde_json::from_str(&json_str).map_err(|e| format!("Bad JSON: {e}"))?;
     let tag = json["tag_name"]
         .as_str()
         .ok_or_else(|| "Missing tag_name".to_string())?;
@@ -247,12 +249,12 @@ pub fn download_scrcpy() -> Result<(), String> {
         "https://github.com/Genymobile/scrcpy/releases/download/{tag}/scrcpy-win64-{tag}.zip"
     );
     let resp = ureq::get(&zip_url)
-        .set("User-Agent", "scrcpy-launcher")
+        .set_header("User-Agent", "scrcpy-launcher")
         .call()
         .map_err(|e| format!("Failed to download scrcpy: {e}"))?;
-    let mut zip_bytes = Vec::new();
-    resp.into_reader()
-        .read_to_end(&mut zip_bytes)
+    let zip_bytes = resp
+        .into_body()
+        .read_to_bytes()
         .map_err(|e| format!("Failed to read zip: {e}"))?;
 
     let cursor = std::io::Cursor::new(zip_bytes);
