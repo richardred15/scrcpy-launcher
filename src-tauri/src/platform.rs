@@ -252,9 +252,11 @@ pub fn download_scrcpy() -> Result<(), String> {
         .header("User-Agent", "scrcpy-launcher")
         .call()
         .map_err(|e| format!("Failed to download scrcpy: {e}"))?;
-    let zip_bytes = resp
-        .into_body()
-        .read_to_bytes()
+    let mut zip_bytes = Vec::new();
+    use std::io::Read;
+    resp.into_body()
+        .into_reader()
+        .read_to_end(&mut zip_bytes)
         .map_err(|e| format!("Failed to read zip: {e}"))?;
 
     let cursor = std::io::Cursor::new(zip_bytes);
