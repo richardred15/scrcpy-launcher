@@ -3,8 +3,19 @@ use std::sync::OnceLock;
 
 use crate::types::Settings;
 
+#[allow(unused_mut)]
+pub fn no_window_command(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 pub fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
-    let mut command = Command::new(program);
+    let mut command = no_window_command(program);
     command.args(args);
     let output = command
         .output()

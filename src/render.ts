@@ -787,7 +787,10 @@ export function initShell(): void {
               <li>Go to <strong>Settings</strong> &gt; <strong>System</strong> &gt; <strong>Developer Options</strong></li>
               <li>Enable <strong>USB Debugging</strong></li>
               <li>Connect your phone to this PC via USB</li>
-              <li>Accept the RSA authorization prompt on your phone screen</li>
+              <li>
+                Accept the RSA authorization prompt on your phone screen
+                <br/><small>If no prompt appears, check your phone's notification panel. You may need to reconnect the USB cable or go to Developer Options &gt; Revoke USB debugging authorizations and retry.</small>
+              </li>
             </ol>
             <div id="scrcpy-win-download" style="display:none">
               <hr />

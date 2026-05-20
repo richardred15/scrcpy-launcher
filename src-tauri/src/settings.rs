@@ -43,24 +43,6 @@ pub fn read_settings(app: &tauri::AppHandle) -> Settings {
     serde_json::from_str(&contents).unwrap_or_else(|_| default_settings())
 }
 
-pub fn read_settings_from_file() -> Settings {
-    let path = settings_file_path();
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(default_settings)
-}
-
-pub fn settings_file_path() -> PathBuf {
-    let base = std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-            PathBuf::from(home).join(".config")
-        });
-    base.join("scrcpy-launcher").join("settings.json")
-}
-
 pub fn cache_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let mut dir = app
         .path()

@@ -468,6 +468,15 @@ export async function init(): Promise<void> {
             updateTopBar();
             updateShellDeviceSerial();
 
+            if (
+                !state.selectedSerial &&
+                state.wirelessDevices.length === 0 &&
+                !state.guideAutoShown
+            ) {
+                state.guideAutoShown = true;
+                showConnectionGuide();
+            }
+
             const selectedChanged = previousSerial !== state.selectedSerial;
             const devicesChanged = previousKey !== nextKey;
 

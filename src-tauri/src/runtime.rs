@@ -5,7 +5,7 @@ use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
 use crate::platform::app_desktop_cleanup;
-use crate::settings::{default_settings, settings_file_path};
+use crate::settings::{default_settings, settings_path};
 use crate::types::Settings;
 
 pub static CHILDREN: LazyLock<Mutex<HashMap<String, Child>>> =
@@ -14,9 +14,10 @@ pub static CHILDREN: LazyLock<Mutex<HashMap<String, Child>>> =
 pub static ACTIVE_APP_IDS: LazyLock<Mutex<HashSet<String>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
-pub fn kill_children() {
-    let settings: Settings = fs::read_to_string(settings_file_path())
+pub fn kill_children(app: &tauri::AppHandle) {
+    let settings: Settings = settings_path(app)
         .ok()
+        .and_then(|p| fs::read_to_string(p).ok())
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_else(default_settings);
     let kill = settings.kill_on_close;

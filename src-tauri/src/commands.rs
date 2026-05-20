@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 
 use tauri::Emitter;
 
-use crate::adb::{adb_shell, scrcpy_supports_display_bounds, scrcpy_supports_flex_display};
+use crate::adb::{
+    adb_shell, no_window_command, scrcpy_supports_display_bounds, scrcpy_supports_flex_display,
+};
 use crate::cache::{self, CacheAction};
 use crate::icon::extract_icon_adb;
 use crate::platform::{app_desktop_write, focus_window, save_app_icon, scrcpy_app_id, scrcpy_dir};
@@ -380,7 +382,7 @@ pub fn get_notification_counts(app: tauri::AppHandle, serial: String) -> HashMap
 pub fn adb_connect(app: tauri::AppHandle, host_port: String) -> Result<String, String> {
     let settings = read_settings(&app);
     eprintln!("adb_connect: {}", host_port);
-    let output = Command::new(&settings.adb_path)
+    let output = no_window_command(&settings.adb_path)
         .args(["connect", &host_port])
         .output()
         .map_err(|e| format!("Failed to run adb: {e}"))?;
@@ -399,7 +401,7 @@ pub fn adb_connect(app: tauri::AppHandle, host_port: String) -> Result<String, S
 pub fn adb_restart_server(app: tauri::AppHandle) -> Result<String, String> {
     let settings = read_settings(&app);
     eprintln!("adb_restart_server");
-    let kill = Command::new(&settings.adb_path)
+    let kill = no_window_command(&settings.adb_path)
         .arg("kill-server")
         .output()
         .map_err(|e| format!("Failed to run adb kill-server: {e}"))?;
@@ -408,7 +410,7 @@ pub fn adb_restart_server(app: tauri::AppHandle) -> Result<String, String> {
         eprintln!("adb kill-server FAILED: {}", stderr);
         return Err(format!("ADB kill-server failed: {stderr}"));
     }
-    let start = Command::new(&settings.adb_path)
+    let start = no_window_command(&settings.adb_path)
         .arg("start-server")
         .output()
         .map_err(|e| format!("Failed to run adb start-server: {e}"))?;
@@ -427,7 +429,7 @@ pub fn adb_restart_server(app: tauri::AppHandle) -> Result<String, String> {
 pub fn adb_disconnect(app: tauri::AppHandle, host_port: String) -> Result<String, String> {
     let settings = read_settings(&app);
     eprintln!("adb_disconnect: {}", host_port);
-    let output = Command::new(&settings.adb_path)
+    let output = no_window_command(&settings.adb_path)
         .args(["disconnect", &host_port])
         .output()
         .map_err(|e| format!("Failed to run adb: {e}"))?;

@@ -6,7 +6,7 @@ use tauri::Emitter;
 
 use crate::adb;
 use crate::runtime::get_open_apps_list;
-use crate::settings::read_settings_from_file;
+use crate::settings::read_settings;
 use crate::types::{AndroidApp, AppsLoadedEvent, BinaryStatus, Device, Settings, ToolStatus};
 
 pub struct RefreshFlag(pub Arc<AtomicBool>);
@@ -17,7 +17,7 @@ pub fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Ar
             return;
         }
 
-        let settings = read_settings_from_file();
+        let settings = read_settings(&app_handle);
 
         let tools = compute_tool_status(&settings);
         let _ = app_handle.emit("tool-status-updated", &tools);
@@ -188,7 +188,7 @@ pub fn trigger_refresh(flag: tauri::State<RefreshFlag>) {
 #[tauri::command]
 pub fn trigger_load_apps(app_handle: tauri::AppHandle, serial: String) {
     std::thread::spawn(move || {
-        let settings = read_settings_from_file();
+        let settings = read_settings(&app_handle);
         let apps = compute_apps(&settings, &serial);
         let _ = app_handle.emit("apps-loaded", AppsLoadedEvent { serial, apps });
     });

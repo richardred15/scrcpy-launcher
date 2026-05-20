@@ -264,12 +264,25 @@ pub fn download_scrcpy() -> Result<(), String> {
         zip::ZipArchive::new(cursor).map_err(|e| format!("Failed to open zip: {e}"))?;
     let out_dir = scrcpy_dir();
 
+    let root_prefix = archive
+        .by_index(0)
+        .ok()
+        .and_then(|f| {
+            let name = f.name();
+            name.find('/').map(|i| name[..=i].to_string())
+        })
+        .unwrap_or_default();
+
     for i in 0..archive.len() {
         let mut file = archive
             .by_index(i)
             .map_err(|e| format!("Zip entry {i}: {e}"))?;
         let name = file.name().to_string();
-        let outpath = out_dir.join(&name);
+        let stripped = name.strip_prefix(&root_prefix).unwrap_or(&name);
+        if stripped.is_empty() {
+            continue;
+        }
+        let outpath = out_dir.join(stripped);
         if file.is_dir() {
             let _ = fs::create_dir_all(&outpath);
         } else {
@@ -277,8 +290,9 @@ pub fn download_scrcpy() -> Result<(), String> {
                 let _ = fs::create_dir_all(p);
             }
             let mut outfile =
-                fs::File::create(&outpath).map_err(|e| format!("Create {name}: {e}"))?;
-            std::io::copy(&mut file, &mut outfile).map_err(|e| format!("Extract {name}: {e}"))?;
+                fs::File::create(&outpath).map_err(|e| format!("Create {stripped}: {e}"))?;
+            std::io::copy(&mut file, &mut outfile)
+                .map_err(|e| format!("Extract {stripped}: {e}"))?;
         }
     }
 

@@ -32,6 +32,7 @@ export type AppState = {
     contextMenu: { x: number; y: number; pkg?: string; folderId?: string; folderName?: string } | null;
     notificationCounts: Record<string, number>;
     createFolderPkg: string;
+    guideAutoShown: boolean;
 };
 
 export function createState(): AppState {
@@ -67,6 +68,7 @@ export function createState(): AppState {
         contextMenu: null,
         notificationCounts: {},
         createFolderPkg: "",
+        guideAutoShown: false,
     };
 }
 

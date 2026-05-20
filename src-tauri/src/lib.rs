@@ -91,13 +91,13 @@ pub fn run() {
             std::process::exit(1);
         });
 
-    app.run(|_handle, event| match event {
+    app.run(|handle, event| match event {
         tauri::RunEvent::Exit
         | tauri::RunEvent::WindowEvent {
             event: tauri::WindowEvent::CloseRequested { .. },
             ..
         } => {
-            kill_children();
+            kill_children(&handle);
         }
         _ => {}
     });
