@@ -97,7 +97,7 @@ pub fn run() {
             event: tauri::WindowEvent::CloseRequested { .. },
             ..
         } => {
-            kill_children(&handle);
+            kill_children(handle);
         }
         _ => {}
     });
