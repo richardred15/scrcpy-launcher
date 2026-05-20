@@ -1,6 +1,6 @@
 [package]
 name = "scrcpy-launcher"
-version = "0.1.3"
+version = "0.1.4"
 description = "A lightweight scrcpy app launcher for Android devices"
 authors = ["scrcpy-launcher contributors"]
 license = "MIT"
