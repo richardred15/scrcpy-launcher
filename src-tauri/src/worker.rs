@@ -82,7 +82,8 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
         let state = parts.get(1).unwrap_or(&"unknown").to_string();
         let wireless = raw_serial.starts_with('*')
             || raw_serial.contains("tcpip:")
-            || raw_serial.contains("wireless:");
+            || raw_serial.contains("wireless:")
+            || raw_serial.contains(':');
         let serial = raw_serial.trim_start_matches('*').to_string();
         if state != "device" {
             devices.push(Device {
@@ -94,6 +95,7 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
                 battery_temperature: None,
                 battery_charging: None,
                 wireless,
+                stable_id: serial.clone(),
             });
             continue;
         }
@@ -105,6 +107,10 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
             .as_deref()
             .map(adb::parse_battery_info)
             .unwrap_or_default();
+        let stable_id = adb::adb_shell(settings, &serial, &["getprop", "ro.serialno"])
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| serial.clone());
         devices.push(Device {
             serial: serial.clone(),
             state,
@@ -114,6 +120,7 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
             battery_temperature,
             battery_charging,
             wireless,
+            stable_id,
         });
     }
     devices

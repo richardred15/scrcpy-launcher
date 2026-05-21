@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { state } from "./state";
+import { state, stableIdForSerial } from "./state";
 import type {
     ToolStatus,
     Device,
@@ -29,6 +29,8 @@ import {
     renderContextMenu,
     openFolder,
     closeCreateFolderModal,
+    openRenameDeviceModal,
+    closeRenameDeviceModal,
     showConnectionGuide,
 } from "./render";
 import {
@@ -48,6 +50,7 @@ import {
     addToFolder,
     removeFromFolder,
     deleteFolder,
+    confirmRenameDevice,
     closeSettings,
     loadSettings,
     loadWirelessDevices,
@@ -64,13 +67,31 @@ export function setupEventDelegation(): void {
         if (folderCard && !folderCard.closest("[data-package]")) {
             event.preventDefault();
             const id = (folderCard as HTMLElement).dataset.folderId!;
-            const devFolders = state.folders[state.selectedSerial] ?? {};
+            const devFolders = state.folders[stableIdForSerial(state.selectedSerial)] ?? {};
             const name = devFolders[id]?.name ?? "folder";
             state.contextMenu = {
                 x: event.clientX,
                 y: event.clientY,
                 folderId: id,
                 folderName: name,
+            };
+            renderContextMenu();
+            return;
+        }
+
+        const devicePill = target.closest(".device-pill");
+        if (devicePill) {
+            event.preventDefault();
+            const option = target.closest(".device-pill-option");
+            const serial = option
+                ? (option as HTMLElement).dataset.serial!
+                : state.selectedSerial;
+            const device = state.devices.find(d => d.serial === serial);
+            const stableId = device?.stableId ?? serial;
+            state.contextMenu = {
+                x: event.clientX,
+                y: event.clientY,
+                deviceStableId: stableId,
             };
             renderContextMenu();
             return;
@@ -109,6 +130,9 @@ export function setupEventDelegation(): void {
                 } else if (action === "delete-folder") {
                     const folderId = item.getAttribute("data-folder-id")!;
                     if (folderId) void deleteFolder(folderId);
+                } else if (action === "rename-device") {
+                    const stableId = item.getAttribute("data-stable-id")!;
+                    openRenameDeviceModal(stableId);
                 }
                 state.contextMenu = null;
                 renderContextMenu();
@@ -136,14 +160,6 @@ export function setupEventDelegation(): void {
             return;
         }
 
-        const removeApp = (event.target as HTMLElement).closest("[data-remove-app]");
-        if (removeApp) {
-            const pkg = (removeApp as HTMLElement).dataset.removeApp!;
-            const id = state.currentFolderId;
-            if (id) void removeFromFolder(id, pkg);
-            return;
-        }
-
         const delFolder = (event.target as HTMLElement).closest("#deleteFolderBtn");
         if (delFolder) {
             const id = state.currentFolderId;
@@ -163,6 +179,18 @@ export function setupEventDelegation(): void {
             }
         }
 
+        if (state.renameDeviceStableId) {
+            const t = event.target as HTMLElement;
+            if (t.closest("#closeRenameDevice") || t.closest("#cancelRenameDevice") || t.classList.contains("modal-overlay")) {
+                closeRenameDeviceModal();
+                return;
+            }
+            if (t.closest("#confirmRenameDevice")) {
+                void confirmRenameDevice();
+                return;
+            }
+        }
+
         const target = event.target as HTMLElement;
         if (target.closest("#settings")) {
             state.settingsOpen = true;
@@ -177,8 +205,6 @@ export function setupEventDelegation(): void {
 
         if (target.closest("#wirelessConnect")) {
             state.wirelessConnectOpen = !state.wirelessConnectOpen;
-            state.wirelessHost = "";
-            state.wirelessPort = "5555";
             state.wirelessConnecting = false;
             state.wirelessConnectResult = null;
             state.wirelessConnectMsg = "";
@@ -248,6 +274,28 @@ export function setupEventDelegation(): void {
             const serial = (mirrorBtn as HTMLElement).dataset.mirror!;
             void launchMirror(serial);
             return;
+        }
+
+        const option = target.closest(".device-pill-option");
+        if (option) {
+            const serial = (option as HTMLElement).dataset.serial!;
+            if (serial !== state.selectedSerial) {
+                state.selectedSerial = serial;
+                updateTopBar();
+                beginLoadApps(serial);
+            }
+            document.querySelector(".device-pill-dropdown")?.classList.remove("open");
+            return;
+        }
+
+        const trigger = target.closest(".device-pill-trigger");
+        if (trigger) {
+            document.querySelector(".device-pill-dropdown")?.classList.toggle("open");
+            return;
+        }
+
+        if (!target.closest(".device-pill")) {
+            document.querySelector(".device-pill-dropdown")?.classList.remove("open");
         }
 
         const deviceCard = target.closest(".device-card");
@@ -355,8 +403,21 @@ export function setupEventDelegation(): void {
             void confirmCreateFolder();
         }
 
+        if (
+            key === "Enter" &&
+            state.renameDeviceStableId &&
+            isInput &&
+            (activeEl as HTMLInputElement).id === "renameDeviceName"
+        ) {
+            void confirmRenameDevice();
+        }
+
         if (key === "Escape" && state.createFolderPkg) {
             closeCreateFolderModal();
+        }
+
+        if (key === "Escape" && state.renameDeviceStableId) {
+            closeRenameDeviceModal();
         }
 
         if (key === "Backspace" && state.query !== "") {
@@ -496,8 +557,14 @@ export async function init(): Promise<void> {
                 }
                 updateAppGrid();
                 updateControlRow();
-            } else if (selectedChanged || devicesChanged) {
-                beginLoadApps(state.selectedSerial);
+            } else {
+                if (state.error) {
+                    state.error = "";
+                    updateErrorBanner();
+                }
+                if (selectedChanged || devicesChanged) {
+                    beginLoadApps(state.selectedSerial);
+                }
             }
         });
 
@@ -521,9 +588,20 @@ export async function init(): Promise<void> {
                 app.iconUrl = iconUrl ?? undefined;
                 state.resolveQueue.delete(packageName);
                 const card = document.querySelector<HTMLElement>(
-                    `[data-package="${packageName}"]`,
+                    `.app-card[data-package="${packageName}"]`,
                 );
                 if (card) updateCardElement(card, app);
+                document.querySelectorAll<HTMLElement>(
+                    `.folder-preview-icon[data-package="${packageName}"]`,
+                ).forEach(el => {
+                    if (iconUrl) {
+                        const img = document.createElement("img");
+                        img.className = "folder-preview-icon";
+                        img.src = iconUrl;
+                        img.dataset.package = packageName;
+                        el.replaceWith(img);
+                    }
+                });
                 updateControlRow();
             }
         });

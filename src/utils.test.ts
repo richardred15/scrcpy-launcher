@@ -107,31 +107,31 @@ describe("readyDeviceKey", () => {
 
     it("formats a single ready device", () => {
         const devices: Device[] = [
-            { serial: "abc", state: "device", model: "Pixel", androidVersion: "14", batteryLevel: 50, batteryCharging: false, wireless: false },
+            { serial: "abc", state: "device", model: "Pixel", androidVersion: "14", batteryLevel: 50, batteryCharging: false, wireless: false, stableId: "abc" },
         ];
         expect(readyDeviceKey(devices)).toBe("abc:Pixel:14");
     });
 
     it("sorts multiple devices and joins with pipe", () => {
         const devices: Device[] = [
-            { serial: "z00", state: "device", model: "B", androidVersion: "13", batteryLevel: 50, batteryCharging: false, wireless: false },
-            { serial: "a00", state: "device", model: "A", androidVersion: "12", batteryLevel: 50, batteryCharging: false, wireless: false },
+            { serial: "z00", state: "device", model: "B", androidVersion: "13", batteryLevel: 50, batteryCharging: false, wireless: false, stableId: "z00" },
+            { serial: "a00", state: "device", model: "A", androidVersion: "12", batteryLevel: 50, batteryCharging: false, wireless: false, stableId: "a00" },
         ];
         expect(readyDeviceKey(devices)).toBe("a00:A:12|z00:B:13");
     });
 
     it("filters out non-device states", () => {
         const devices: Device[] = [
-            { serial: "online", state: "device", wireless: false },
-            { serial: "offline", state: "offline", wireless: false },
-            { serial: "unauth", state: "unauthorized", wireless: false },
+            { serial: "online", state: "device", wireless: false, stableId: "online" },
+            { serial: "offline", state: "offline", wireless: false, stableId: "offline" },
+            { serial: "unauth", state: "unauthorized", wireless: false, stableId: "unauth" },
         ];
         expect(readyDeviceKey(devices)).toBe("online::");
     });
 
     it("handles missing model and androidVersion", () => {
         const devices: Device[] = [
-            { serial: "abc", state: "device", wireless: false },
+            { serial: "abc", state: "device", wireless: false, stableId: "abc" },
         ];
         expect(readyDeviceKey(devices)).toBe("abc::");
     });
@@ -140,8 +140,8 @@ describe("readyDeviceKey", () => {
 describe("selectedDevice", () => {
     it("returns the device matching selectedSerial", () => {
         state.devices = [
-            { serial: "abc", state: "device", wireless: false },
-            { serial: "def", state: "device", wireless: false },
+            { serial: "abc", state: "device", wireless: false, stableId: "abc" },
+            { serial: "def", state: "device", wireless: false, stableId: "def" },
         ];
         state.selectedSerial = "def";
         expect(selectedDevice()?.serial).toBe("def");
@@ -149,7 +149,7 @@ describe("selectedDevice", () => {
 
     it("returns undefined when no match", () => {
         state.devices = [
-            { serial: "abc", state: "device", wireless: false },
+            { serial: "abc", state: "device", wireless: false, stableId: "abc" },
         ];
         state.selectedSerial = "nonexistent";
         expect(selectedDevice()).toBeUndefined();

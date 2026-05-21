@@ -164,18 +164,30 @@ describe("doWirelessConnect", () => {
     });
 
     it("connects successfully", async () => {
-        vi.useFakeTimers();
         state.wirelessHost = "192.168.1.100";
         state.wirelessPort = "5555";
+        state.settings = {
+            adbPath: "adb",
+            scrcpyPath: "scrcpy",
+            includeSystemApps: false,
+            iconSource: "none",
+            flexDisplay: false,
+            webEnabled: false,
+            adbFallback: false,
+            killOnClose: false,
+            displayBounds: "",
+            deviceDisplayBounds: {},
+            wirelessDevices: [],
+            lastWirelessHost: "",
+            lastWirelessPort: "5555",
+            folders: {},
+            deviceNicknames: {},
+        };
         vi.mocked(invoke).mockResolvedValue("connected to 192.168.1.100:5555");
-        const promise = doWirelessConnect();
-        await vi.advanceTimersByTimeAsync(10);
+        await doWirelessConnect();
         expect(invoke).toHaveBeenCalledWith("adb_connect", { hostPort: "192.168.1.100:5555" });
         expect(invoke).toHaveBeenCalledWith("save_wireless_device", { hostPort: "192.168.1.100:5555" });
-        expect(state.wirelessConnectResult).toBe("ok");
-        await vi.advanceTimersByTimeAsync(1000);
-        await promise;
-        vi.useRealTimers();
+        expect(state.wirelessConnectOpen).toBe(false);
     });
 
     it("handles connection failure", async () => {
@@ -301,7 +313,10 @@ describe("loadSettings", () => {
             displayBounds: "",
             deviceDisplayBounds: {},
             wirelessDevices: [],
+            lastWirelessHost: "",
+            lastWirelessPort: "5555",
             folders: { "abc": { games: { id: "games", name: "Games", apps: ["com.a"] } } },
+            deviceNicknames: {},
         };
         vi.mocked(invoke).mockResolvedValue(settings);
         await loadSettings();
@@ -333,7 +348,10 @@ describe("saveSettings", () => {
             displayBounds: "",
             deviceDisplayBounds: {},
             wirelessDevices: [],
+            lastWirelessHost: "",
+            lastWirelessPort: "5555",
             folders: {},
+            deviceNicknames: {},
         };
         vi.mocked(invoke).mockImplementation(async (_cmd: string, args?: any) => ({ ...args?.settings }));
         await saveSettings();

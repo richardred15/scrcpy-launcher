@@ -135,40 +135,42 @@ describe("renderDeviceSelect", () => {
         expect(html).toContain("No devices");
     });
 
-    it("shows device card for single device with mirror button", () => {
+    it("shows device pill for single device with mirror button", () => {
         state.loadingDevices = false;
-        state.devices = [{ serial: "abc", state: "device", model: "Pixel", wireless: false }];
+        state.devices = [{ serial: "abc", state: "device", model: "Pixel", wireless: false, stableId: "abc" }];
         const html = renderDeviceSelect();
-        expect(html).toContain("device-card");
+        expect(html).toContain("device-pill");
         expect(html).toContain("Pixel");
         expect(html).toContain('data-mirror="abc"');
+        expect(html).toContain('data-lucide="usb"');
     });
 
-    it("shows device cards for multiple devices", () => {
+    it("shows device pill with dropdown for multiple devices", () => {
         state.loadingDevices = false;
         state.devices = [
-            { serial: "abc", state: "device", model: "Pixel", wireless: false },
-            { serial: "def", state: "device", model: "Nexus", wireless: true },
+            { serial: "abc", state: "device", model: "Pixel", wireless: false, stableId: "abc" },
+            { serial: "def", state: "device", model: "Nexus", wireless: true, stableId: "def" },
         ];
         const html = renderDeviceSelect();
-        expect(html).toContain('class="device-cards"');
+        expect(html).toContain("device-pill");
+        expect(html).toContain("device-pill-dropdown");
         expect(html).toContain("Pixel");
         expect(html).toContain("Nexus");
+        expect(html).toContain("chevron-down");
         expect(html).toContain('data-mirror="abc"');
-        expect(html).toContain('data-mirror="def"');
     });
 });
 
 describe("renderBatteryPill", () => {
     it("renders when device has battery level", () => {
-        state.devices = [{ serial: "abc", state: "device", batteryLevel: 80, batteryCharging: false, wireless: false }];
+        state.devices = [{ serial: "abc", state: "device", batteryLevel: 80, batteryCharging: false, wireless: false, stableId: "abc" }];
         state.selectedSerial = "abc";
         const html = renderBatteryPill();
         expect(html).toContain("80%");
     });
 
     it("includes charging icon when charging", () => {
-        state.devices = [{ serial: "abc", state: "device", batteryLevel: 50, batteryCharging: true, wireless: false }];
+        state.devices = [{ serial: "abc", state: "device", batteryLevel: 50, batteryCharging: true, wireless: false, stableId: "abc" }];
         state.selectedSerial = "abc";
         const html = renderBatteryPill();
         expect(html).toContain("battery-charging");
@@ -181,7 +183,7 @@ describe("renderBatteryPill", () => {
 
 describe("renderTempPill", () => {
     it("renders temperature when available", () => {
-        state.devices = [{ serial: "abc", state: "device", batteryTemperature: 36.5, wireless: false }];
+        state.devices = [{ serial: "abc", state: "device", batteryTemperature: 36.5, wireless: false, stableId: "abc" }];
         state.selectedSerial = "abc";
         const html = renderTempPill();
         expect(html).toContain("36.5");
@@ -240,9 +242,12 @@ describe("renderSettings", () => {
             displayBounds: "",
             deviceDisplayBounds: {},
             wirelessDevices: [],
+            lastWirelessHost: "",
+            lastWirelessPort: "5555",
             folders: {},
+            deviceNicknames: {},
         };
-        state.devices = [{ serial: "abc", state: "device", wireless: false }];
+        state.devices = [{ serial: "abc", state: "device", wireless: false, stableId: "abc" }];
         const html = renderSettings();
         expect(html).toContain('id="adbPath"');
         expect(html).toContain('/usr/bin/adb');

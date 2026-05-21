@@ -31,7 +31,13 @@ pub struct Settings {
     #[serde(default)]
     pub wireless_devices: Vec<String>,
     #[serde(default)]
+    pub last_wireless_host: String,
+    #[serde(default)]
+    pub last_wireless_port: String,
+    #[serde(default)]
     pub folders: HashMap<String, HashMap<String, Folder>>,
+    #[serde(default)]
+    pub device_nicknames: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +74,7 @@ pub struct Device {
     pub battery_temperature: Option<f32>,
     pub battery_charging: Option<bool>,
     pub wireless: bool,
+    pub stable_id: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

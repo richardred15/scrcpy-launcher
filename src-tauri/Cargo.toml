@@ -1,6 +1,6 @@
 [package]
 name = "scrcpy-launcher"
-version = "0.1.4"
+version = "0.1.5"
 description = "A lightweight scrcpy app launcher for Android devices"
 authors = ["scrcpy-launcher contributors"]
 license = "MIT"
@@ -26,6 +26,7 @@ uuid = { version = "1", features = ["v4"] }
 quick-xml = "0.37"
 image = { version = "0.25", default-features = false, features = ["png", "webp"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+apk-info-axml = "1.0.11"
 
 [profile.release]
 strip = true

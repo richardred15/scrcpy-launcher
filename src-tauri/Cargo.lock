@@ -48,6 +48,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "apk-info-axml"
+version = "1.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07d6cd89ab93032e8eeb18f822774cad67222bdcd3a332989caaa43b4ec650a9"
+dependencies = [
+ "apk-info-xml",
+ "bitflags 2.11.1",
+ "log",
+ "phf 0.13.1",
+ "phf_codegen 0.13.1",
+ "quick-xml 0.39.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "winnow 0.7.15",
+]
+
+[[package]]
+name = "apk-info-xml"
+version = "1.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29b05a4ac2fb73f3ca59a708807c3870b3901f8251135690fb7de8b05bb687c7"
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2839,8 +2863,9 @@ dependencies = [
 
 [[package]]
 name = "scrcpy-launcher"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
+ "apk-info-axml",
  "base64 0.22.1",
  "flate2",
  "image",
@@ -4395,7 +4420,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4716,6 +4741,9 @@ name = "winnow"
 version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "winnow"

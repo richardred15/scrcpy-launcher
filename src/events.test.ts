@@ -68,13 +68,13 @@ describe("setupEventDelegation - topbar buttons", () => {
         expect(state.wirelessConnectOpen).toBe(false);
     });
 
-    it("clears wireless host/port state when toggling form", () => {
+    it("preserves wireless host/port state when toggling form", () => {
         state.wirelessHost = "192.168.1.1";
         state.wirelessPort = "5555";
         state.wirelessConnectResult = "error";
         state.wirelessConnectMsg = "bad";
         click("wirelessConnect");
-        expect(state.wirelessHost).toBe("");
+        expect(state.wirelessHost).toBe("192.168.1.1");
         expect(state.wirelessPort).toBe("5555");
         expect(state.wirelessConnectResult).toBeNull();
         expect(state.wirelessConnectMsg).toBe("");
@@ -170,8 +170,8 @@ describe("setupEventDelegation - folder card click", () => {
 describe("setupEventDelegation - device cards", () => {
     it("selects device on card click", () => {
         state.devices = [
-            { serial: "abc", state: "device", model: "Pixel", wireless: false },
-            { serial: "def", state: "device", model: "Nexus", wireless: true },
+            { serial: "abc", state: "device", model: "Pixel", wireless: false, stableId: "abc" },
+            { serial: "def", state: "device", model: "Nexus", wireless: true, stableId: "def" },
         ];
         const shell = document.getElementById("app-shell")!;
         const card = document.createElement("div");
@@ -185,8 +185,8 @@ describe("setupEventDelegation - device cards", () => {
     it("does nothing when clicking already-selected card", () => {
         state.selectedSerial = "abc";
         state.devices = [
-            { serial: "abc", state: "device", model: "Pixel", wireless: false },
-            { serial: "def", state: "device", model: "Nexus", wireless: true },
+            { serial: "abc", state: "device", model: "Pixel", wireless: false, stableId: "abc" },
+            { serial: "def", state: "device", model: "Nexus", wireless: true, stableId: "def" },
         ];
         const shell = document.getElementById("app-shell")!;
         const card = document.createElement("div");
@@ -199,7 +199,7 @@ describe("setupEventDelegation - device cards", () => {
 
     it("mirrors device via data-mirror button", () => {
         state.devices = [
-            { serial: "abc", state: "device", model: "Pixel", wireless: false },
+            { serial: "abc", state: "device", model: "Pixel", wireless: false, stableId: "abc" },
         ];
         state.selectedSerial = "abc";
         const shell = document.getElementById("app-shell")!;

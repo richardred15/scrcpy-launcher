@@ -16,6 +16,13 @@ use crate::settings::read_settings;
 use crate::types::{AppMetaResolvedEvent, CachedAppMeta, Folder, LaunchResult, Settings};
 use crate::web::{download_icon_as_data_url, rate_limit, scrape_fdroid, scrape_google_play};
 
+fn stable_folder_id(settings: &Settings, serial: &str) -> String {
+    adb_shell(settings, serial, &["getprop", "ro.serialno"])
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| serial.to_string())
+}
+
 // ── Folder Management ───────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -25,6 +32,7 @@ pub fn create_folder(
     name: String,
 ) -> Result<String, String> {
     let settings = read_settings(&app);
+    let sid = stable_folder_id(&settings, &serial);
     let id = uuid::Uuid::new_v4().to_string();
     let folder = Folder {
         id: id.clone(),
@@ -34,7 +42,7 @@ pub fn create_folder(
     let mut new_settings = settings.clone();
     new_settings
         .folders
-        .entry(serial)
+        .entry(sid)
         .or_default()
         .insert(id.clone(), folder);
     let path = crate::settings::settings_path(&app)
@@ -53,8 +61,9 @@ pub fn add_app_to_folder(
     package_name: String,
 ) -> Result<(), String> {
     let settings = read_settings(&app);
+    let sid = stable_folder_id(&settings, &serial);
     let mut new_settings = settings.clone();
-    let device_folders = new_settings.folders.entry(serial).or_default();
+    let device_folders = new_settings.folders.entry(sid).or_default();
     if !device_folders.contains_key(&folder_id) {
         if folder_id == "favorites" {
             device_folders.insert(
@@ -90,8 +99,9 @@ pub fn remove_app_from_folder(
     package_name: String,
 ) -> Result<(), String> {
     let settings = read_settings(&app);
+    let sid = stable_folder_id(&settings, &serial);
     let mut new_settings = settings.clone();
-    if let Some(device_folders) = new_settings.folders.get_mut(&serial) {
+    if let Some(device_folders) = new_settings.folders.get_mut(&sid) {
         if let Some(folder) = device_folders.get_mut(&folder_id) {
             folder.apps.retain(|p| p != &package_name);
         } else {
@@ -116,8 +126,9 @@ pub fn rename_folder(
     new_name: String,
 ) -> Result<(), String> {
     let settings = read_settings(&app);
+    let sid = stable_folder_id(&settings, &serial);
     let mut new_settings = settings.clone();
-    if let Some(device_folders) = new_settings.folders.get_mut(&serial) {
+    if let Some(device_folders) = new_settings.folders.get_mut(&sid) {
         if let Some(folder) = device_folders.get_mut(&folder_id) {
             folder.name = new_name;
         } else {
@@ -141,8 +152,9 @@ pub fn delete_folder(
     folder_id: String,
 ) -> Result<(), String> {
     let settings = read_settings(&app);
+    let sid = stable_folder_id(&settings, &serial);
     let mut new_settings = settings.clone();
-    if let Some(device_folders) = new_settings.folders.get_mut(&serial) {
+    if let Some(device_folders) = new_settings.folders.get_mut(&sid) {
         if device_folders.remove(&folder_id).is_none() {
             return Err("Folder not found".into());
         }
@@ -442,6 +454,31 @@ pub fn adb_disconnect(app: tauri::AppHandle, host_port: String) -> Result<String
         eprintln!("adb_disconnect: FAILED: {}", stderr);
         Err(format!("ADB disconnect failed: {stderr}"))
     }
+}
+
+// ── Device nicknames ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn set_device_nickname(
+    app: tauri::AppHandle,
+    stable_id: String,
+    nickname: String,
+) -> Result<(), String> {
+    let settings = read_settings(&app);
+    let mut new_settings = settings.clone();
+    if nickname.trim().is_empty() {
+        new_settings.device_nicknames.remove(&stable_id);
+    } else {
+        new_settings
+            .device_nicknames
+            .insert(stable_id, nickname.trim().to_string());
+    }
+    let path = crate::settings::settings_path(&app)
+        .map_err(|e| format!("Cannot get settings path: {e}"))?;
+    let contents =
+        serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
+    fs::write(&path, contents).map_err(|e| format!("Write error: {e}"))?;
+    Ok(())
 }
 
 // ── Wireless device management ───────────────────────────────────────────────

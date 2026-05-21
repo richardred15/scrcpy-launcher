@@ -1,5 +1,10 @@
 import type { SettingsState, ToolStatus, Device, AndroidApp, CachedAppMeta, Folder } from "./types";
 
+export function stableIdForSerial(serial: string): string {
+    const device = state.devices.find(d => d.serial === serial);
+    return device?.stableId ?? serial;
+}
+
 export type AppState = {
     settings: SettingsState | null;
     tools: ToolStatus | null;
@@ -29,9 +34,10 @@ export type AppState = {
     focusedAppIndex: number | null;
     launchingPackage: string;
     launchMessages: Map<string, { kind: "info" | "error"; text: string }>;
-    contextMenu: { x: number; y: number; pkg?: string; folderId?: string; folderName?: string } | null;
+    contextMenu: { x: number; y: number; pkg?: string; folderId?: string; folderName?: string; deviceStableId?: string } | null;
     notificationCounts: Record<string, number>;
     createFolderPkg: string;
+    renameDeviceStableId: string;
     guideAutoShown: boolean;
 };
 
@@ -68,6 +74,7 @@ export function createState(): AppState {
         contextMenu: null,
         notificationCounts: {},
         createFolderPkg: "",
+        renameDeviceStableId: "",
         guideAutoShown: false,
     };
 }

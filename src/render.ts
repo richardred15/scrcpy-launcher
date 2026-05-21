@@ -1,4 +1,4 @@
-import { state } from "./state";
+import { state, stableIdForSerial } from "./state";
 import type { AndroidApp, Folder, BinaryStatus, Device } from "./types";
 import {
     shellEscapeText,
@@ -15,6 +15,7 @@ import {
     BatteryFull,
     BatteryLow,
     BatteryMedium,
+    ChevronDown,
     MonitorSmartphone,
     Play,
     RefreshCw,
@@ -23,6 +24,7 @@ import {
     Settings,
     Smartphone,
     Trash2,
+    Usb,
     Wifi,
     X,
     Download,
@@ -56,34 +58,45 @@ export function renderDeviceSelect(): string {
         return `<div class="device-chip warning"><span class="dot"></span><span>No devices</span></div>`;
     }
 
-    return `<div class="device-cards">${state.devices.map(d => renderDeviceCard(d)).join("")}</div>`;
-}
+    const selected = state.devices.find(d => d.serial === state.selectedSerial) ?? state.devices[0];
+    const icon = selected.wireless ? "wifi" : "usb";
+    const nickname = state.settings?.deviceNicknames?.[selected.stableId];
+    const name = nickname ?? selected.model ?? selected.serial;
+    const batteryHtml = selected.batteryLevel !== undefined
+        ? `<span class="device-badge">${selected.batteryCharging ? '<i data-lucide="battery-charging"></i>' : batteryIcon(selected.batteryLevel)} ${selected.batteryLevel}%</span>`
+        : "";
+    const tempHtml = selected.batteryTemperature !== undefined
+        ? `<span class="device-badge">${selected.batteryTemperature.toFixed(1)}°C</span>`
+        : "";
+    const isSelected = state.devices.some(d => d.serial === state.selectedSerial);
+    const cls = isSelected ? "device-pill selected" : "device-pill";
 
-function renderDeviceCard(device: Device): string {
-    const isSelected = device.serial === state.selectedSerial;
-    const name = device.model || device.serial;
-    const wirelessIcon = device.wireless
-        ? `<i data-lucide="wifi" class="device-wifi"></i>`
+    const dropdownHtml = state.devices.length > 1
+        ? `<div class="device-pill-dropdown">${state.devices.map(d => {
+            const optIcon = d.wireless ? "wifi" : "usb";
+            const optNick = state.settings?.deviceNicknames?.[d.stableId];
+            const optLabel = [optNick, d.model, d.serial].filter(Boolean).join(" · ");
+            const optSelected = d.serial === state.selectedSerial ? " selected" : "";
+            return `<div class="device-pill-option${optSelected}" data-serial="${shellEscapeText(d.serial)}">
+              <i data-lucide="${optIcon}"></i>
+              <span>${shellEscapeText(optLabel)}</span>
+            </div>`;
+        }).join("")}</div>`
         : "";
-    const batteryHtml = device.batteryLevel !== undefined
-        ? `<span class="device-badge">${device.batteryCharging ? '<i data-lucide="battery-charging"></i>' : batteryIcon(device.batteryLevel)} ${device.batteryLevel}%</span>`
-        : "";
-    const tempHtml = device.batteryTemperature !== undefined
-        ? `<span class="device-badge">${device.batteryTemperature.toFixed(1)}°C</span>`
-        : "";
-    const disconnectBtn = device.wireless
-        ? `<button class="icon-button tiny" data-disconnect="${shellEscapeText(device.serial)}" title="Disconnect"><i data-lucide="x"></i></button>`
-        : "";
-    const cls = isSelected ? "device-card selected" : "device-card";
+
+    const chevron = state.devices.length > 1 ? `<i data-lucide="chevron-down"></i>` : "";
+
     return `
-    <div class="${cls}" data-serial="${shellEscapeText(device.serial)}">
-      <i data-lucide="smartphone"></i>
-      <span class="device-card-name">${shellEscapeText(name)}</span>
-      ${wirelessIcon}
+    <div class="${cls}">
+      <div class="device-pill-trigger">
+        <i data-lucide="${icon}"></i>
+        <span class="device-card-name">${shellEscapeText(name)}</span>
+        ${chevron}
+      </div>
+      ${dropdownHtml}
       ${batteryHtml}
       ${tempHtml}
-      <button class="icon-button tiny" data-mirror="${shellEscapeText(device.serial)}" title="Mirror"><i data-lucide="monitor-smartphone"></i></button>
-      ${disconnectBtn}
+      <button class="icon-button tiny" data-mirror="${shellEscapeText(selected.serial)}" title="Mirror"><i data-lucide="monitor-smartphone"></i></button>
     </div>`;
 }
 
@@ -142,8 +155,8 @@ export function renderAppIcon(item: AndroidApp): string {
   `;
 }
 
-export function updateNotificationBadges(): void {
-    document.querySelectorAll(".app-card").forEach(card => {
+function updateBadgesFor(selector: string): void {
+    document.querySelectorAll(selector).forEach(card => {
         const pkg = (card as HTMLElement).dataset.package;
         if (!pkg) return;
         const count = state.notificationCounts[pkg] || 0;
@@ -162,6 +175,11 @@ export function updateNotificationBadges(): void {
             badge?.remove();
         }
     });
+}
+
+export function updateNotificationBadges(): void {
+    updateBadgesFor(".app-card");
+    updateBadgesFor(".modal-app-card");
 }
 
 export function highlightText(text: string, query: string): string {
@@ -282,7 +300,7 @@ export function updateFolderModal(): void {
     let apps: AndroidApp[] = [];
     let title = "";
 
-    const deviceFolders = state.folders[state.selectedSerial] ?? {};
+    const deviceFolders = state.folders[stableIdForSerial(state.selectedSerial)] ?? {};
     const folder = deviceFolders[id];
     if (folder) {
         title = folder.name;
@@ -305,7 +323,6 @@ export function updateFolderModal(): void {
                     <div class="modal-app-card" data-package="${app.packageName}" data-launch="${app.packageName}">
                         ${renderAppIcon(app)}
                         <span>${shellEscapeText(app.label)}</span>
-                        <button class="icon-button tiny" data-remove-app="${app.packageName}" title="Remove from folder"><i data-lucide="x"></i></button>
                     </div>
                 `).join("")
                 : '<p class="empty-msg">No apps in this folder</p>'
@@ -313,6 +330,7 @@ export function updateFolderModal(): void {
         </div>
     `;
     renderIcons();
+    updateNotificationBadges();
 }
 
 export function updateFocusedApp(): void {
@@ -336,9 +354,10 @@ export function createFolderElement(folder: Folder): HTMLElement {
         : state.apps.filter(a => folder.apps.includes(a.packageName));
 
     const previewIcons = apps.slice(0, 4).map(app => {
+        const pkgAttr = `data-package="${shellEscapeText(app.packageName)}"`;
         return app.iconUrl 
-            ? `<img src="${shellEscapeText(app.iconUrl)}" class="folder-preview-icon" />`
-            : `<div class="folder-preview-icon fallback" style="background: ${iconSeed(app.packageName)}"></div>`;
+            ? `<img src="${shellEscapeText(app.iconUrl)}" class="folder-preview-icon" ${pkgAttr} />`
+            : `<div class="folder-preview-icon fallback" style="background: ${iconSeed(app.packageName)}" ${pkgAttr}></div>`;
     }).join("");
 
     const label = folder.name;
@@ -415,7 +434,7 @@ export function updateAppGrid(): void {
 
     const fragment = document.createDocumentFragment();
 
-    const deviceFolders = state.folders[state.selectedSerial] ?? {};
+    const deviceFolders = state.folders[stableIdForSerial(state.selectedSerial)] ?? {};
     Object.values(deviceFolders).forEach(folder => {
         fragment.appendChild(createFolderElement(folder));
     });
@@ -562,8 +581,8 @@ export function renderIcons() {
         createIcons({
             icons: {
                 Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium,
-                Download, MonitorSmartphone, Play, RefreshCw, Search, Server,
-                Settings, Smartphone, Trash2, Wifi, X,
+                ChevronDown, Download, MonitorSmartphone, Play, RefreshCw, Search,
+                Server, Settings, Smartphone, Trash2, Usb, Wifi, X,
             },
         });
     } catch (error) {
@@ -600,10 +619,22 @@ export function updateWirelessForm(): void {
     renderIcons();
 }
 
+let errorClearTimer: ReturnType<typeof setTimeout> | null = null;
+
 export function updateErrorBanner(): void {
     const container = document.getElementById("error-container");
     if (!container) return;
     container.innerHTML = state.error ? `<div class="error-banner">${shellEscapeText(state.error)}</div>` : "";
+    if (errorClearTimer) {
+        clearTimeout(errorClearTimer);
+        errorClearTimer = null;
+    }
+    if (state.error) {
+        errorClearTimer = setTimeout(() => {
+            state.error = "";
+            updateErrorBanner();
+        }, 5000);
+    }
 }
 
 export function updateSettings(): void {
@@ -635,7 +666,7 @@ export function renderContextMenu(): void {
         return;
     }
 
-    const { x, y, pkg, folderId, folderName } = state.contextMenu;
+    const { x, y, pkg, folderId, folderName, deviceStableId } = state.contextMenu;
     menu.style.display = "block";
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
@@ -647,6 +678,17 @@ export function renderContextMenu(): void {
     const flipY = y + offsetHeight > vh;
     if (flipX) menu.style.left = `${Math.max(4, x - offsetWidth)}px`;
     if (flipY) menu.style.top = `${Math.max(4, y - offsetHeight)}px`;
+
+    // Device-level context menu (right-click on a device pill)
+    if (deviceStableId) {
+        menu.innerHTML = `
+        <div class="menu-group">
+            <div class="menu-item" data-action="rename-device" data-stable-id="${shellEscapeText(deviceStableId)}">
+                <span>Rename device</span>
+            </div>
+        </div>`;
+        return;
+    }
 
     // Folder-level context menu (right-click on a folder card)
     if (folderId && !pkg) {
@@ -662,7 +704,7 @@ export function renderContextMenu(): void {
     if (!pkg) return;
 
     const inFolder = state.currentFolderId && state.currentFolderId !== "favorites";
-    const deviceFolders = state.folders[state.selectedSerial] ?? {};
+    const deviceFolders = state.folders[stableIdForSerial(state.selectedSerial)] ?? {};
     const folders = Object.values(deviceFolders);
     const folderOptions = folders
         .filter(f => f.id !== "favorites")
@@ -710,6 +752,23 @@ export function openCreateFolderModal(pkg: string): void {
 export function closeCreateFolderModal(): void {
     state.createFolderPkg = "";
     document.getElementById("create-folder-modal")?.classList.remove("open");
+}
+
+export function openRenameDeviceModal(stableId: string): void {
+    state.renameDeviceStableId = stableId;
+    const modal = document.getElementById("rename-device-modal");
+    if (!modal) return;
+    modal.classList.add("open");
+    const input = document.getElementById("renameDeviceName") as HTMLInputElement;
+    if (input) {
+        input.value = state.settings?.deviceNicknames?.[stableId] ?? "";
+        input.focus();
+    }
+}
+
+export function closeRenameDeviceModal(): void {
+    state.renameDeviceStableId = "";
+    document.getElementById("rename-device-modal")?.classList.remove("open");
 }
 
 export function initShell(): void {
@@ -768,6 +827,24 @@ export function initShell(): void {
             <div class="create-folder-actions">
               <button class="empty-button" id="cancelCreateFolder">Cancel</button>
               <button class="empty-button primary" id="confirmCreateFolder">Create</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="rename-device-modal" class="folder-modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+          <div class="modal-head">
+            <h2>Rename device</h2>
+            <button class="icon-button" id="closeRenameDevice" title="Cancel"><i data-lucide="x"></i></button>
+          </div>
+          <div class="create-folder-body">
+            <label class="create-folder-label">Device nickname</label>
+            <input id="renameDeviceName" class="create-folder-input" placeholder="e.g. My Phone" autocomplete="off" />
+            <div class="create-folder-actions">
+              <button class="empty-button" id="cancelRenameDevice">Cancel</button>
+              <button class="empty-button primary" id="confirmRenameDevice">Rename</button>
             </div>
           </div>
         </div>

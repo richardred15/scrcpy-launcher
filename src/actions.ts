@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { state } from "./state";
+import { state, stableIdForSerial } from "./state";
 import type { AndroidApp, Folder, SettingsState, LaunchResult, CachedAppMeta } from "./types";
 import { isFavorited } from "./utils";
 import {
@@ -16,6 +16,7 @@ import {
     renderContextMenu,
     closeCreateFolderModal,
     openCreateFolderModal,
+    closeRenameDeviceModal,
 } from "./render";
 
 export async function fetchNotificationCounts(): Promise<void> {
@@ -32,7 +33,7 @@ export async function fetchNotificationCounts(): Promise<void> {
 }
 
 export function deviceFolders(): Record<string, Folder> {
-    return state.folders[state.selectedSerial] ?? {};
+    return state.folders[stableIdForSerial(state.selectedSerial)] ?? {};
 }
 
 export async function removeFromFolder(folderId: string, pkg: string): Promise<void> {
@@ -59,7 +60,7 @@ export async function deleteFolder(folderId: string): Promise<void> {
     const folderName = deviceFolders()[folderId]?.name;
     try {
         await invoke("delete_folder", { serial, folderId });
-        delete state.folders[serial]?.[folderId];
+        delete state.folders[stableIdForSerial(state.selectedSerial)]?.[folderId];
         if (state.currentFolderId === folderId) {
             openFolder(null);
         }
@@ -88,8 +89,9 @@ export async function addToFolder(folderId: string, pkg: string): Promise<void> 
             if (folder && !folder.apps.includes(pkg)) {
                 folder.apps.push(pkg);
             } else if (folderId === "favorites") {
-                state.folders[serial] = state.folders[serial] ?? {};
-                state.folders[serial][folderId] = { id: folderId, name: "Favorites", apps: [pkg] };
+                const sid = stableIdForSerial(state.selectedSerial);
+                state.folders[sid] = state.folders[sid] ?? {};
+                state.folders[sid][folderId] = { id: folderId, name: "Favorites", apps: [pkg] };
             }
         }
         updateAppGrid();
@@ -112,8 +114,9 @@ export async function confirmCreateFolder(): Promise<void> {
     closeCreateFolderModal();
     try {
         const id = await invoke<string>("create_folder", { serial, name });
-        state.folders[serial] = state.folders[serial] ?? {};
-        state.folders[serial][id] = { id, name, apps: [] };
+        const sid = stableIdForSerial(state.selectedSerial);
+        state.folders[sid] = state.folders[sid] ?? {};
+        state.folders[sid][id] = { id, name, apps: [] };
         state.contextMenu = null;
         renderContextMenu();
         await addToFolder(id, pkg);
@@ -125,6 +128,28 @@ export async function confirmCreateFolder(): Promise<void> {
 
 export async function createFolderPrompt(pkg: string): Promise<void> {
     openCreateFolderModal(pkg);
+}
+
+export async function confirmRenameDevice(): Promise<void> {
+    const stableId = state.renameDeviceStableId;
+    if (!stableId) return;
+    const input = document.getElementById("renameDeviceName") as HTMLInputElement;
+    const nickname = input?.value.trim() ?? "";
+    closeRenameDeviceModal();
+    try {
+        await invoke("set_device_nickname", { stableId, nickname });
+        if (state.settings) {
+            if (nickname) {
+                state.settings.deviceNicknames[stableId] = nickname;
+            } else {
+                delete state.settings.deviceNicknames[stableId];
+            }
+        }
+        updateTopBar();
+    } catch (e: any) {
+        state.error = String(e);
+        updateErrorBanner();
+    }
 }
 
 export async function doWirelessConnect(): Promise<void> {
@@ -158,14 +183,10 @@ export async function doWirelessConnect(): Promise<void> {
             result.includes("connected to")
         ) {
             await invoke("save_wireless_device", { hostPort });
-            state.wirelessConnecting = false;
-            state.wirelessConnectResult = "ok";
-            state.wirelessConnectMsg = "";
-            updateWirelessForm();
-            await new Promise((r) => setTimeout(r, 1000));
+            state.settings!.lastWirelessHost = host;
+            state.settings!.lastWirelessPort = port;
+            await invoke("save_settings", { settings: state.settings });
             state.wirelessConnectOpen = false;
-            state.wirelessHost = "";
-            state.wirelessPort = "5555";
             state.wirelessConnectResult = null;
             state.wirelessConnectMsg = "";
             await refreshAll();
@@ -271,6 +292,10 @@ export async function refreshAll(): Promise<void> {
 export async function loadSettings(): Promise<void> {
     state.settings = await invoke<SettingsState>("get_settings");
     state.folders = state.settings?.folders || {};
+    if (state.settings?.lastWirelessHost) {
+        state.wirelessHost = state.settings.lastWirelessHost;
+        state.wirelessPort = state.settings.lastWirelessPort;
+    }
 }
 
 export async function saveSettings(): Promise<void> {

@@ -16,7 +16,10 @@ export type SettingsState = {
     displayBounds: string;
     deviceDisplayBounds: Record<string, string>;
     wirelessDevices: string[];
+    lastWirelessHost: string;
+    lastWirelessPort: string;
     folders: Record<string, Record<string, Folder>>;
+    deviceNicknames: Record<string, string>;
 };
 
 export type BinaryStatus = {
@@ -40,6 +43,7 @@ export type Device = {
     batteryTemperature?: number;
     batteryCharging?: boolean;
     wireless: boolean;
+    stableId: string;
 };
 
 export type AndroidApp = {

@@ -19,7 +19,10 @@ pub fn default_settings() -> Settings {
         display_bounds: "540x960".into(),
         device_display_bounds: HashMap::new(),
         wireless_devices: Vec::new(),
+        last_wireless_host: String::new(),
+        last_wireless_port: "5555".into(),
         folders: HashMap::new(), // HashMap<serial, HashMap<folder_id, Folder>>
+        device_nicknames: HashMap::new(),
     }
 }
 

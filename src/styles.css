@@ -126,6 +126,7 @@ button {
 .pill,
 .device-chip,
 .device-card,
+.device-pill,
 .search-box {
   display: inline-flex;
   align-items: center;
@@ -170,12 +171,6 @@ button {
   color: #aeb4bc;
 }
 
-.device-cards {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .device-card {
   padding: 2px 8px;
   gap: 4px;
@@ -189,6 +184,84 @@ button {
 
 .device-card:hover {
   border-color: rgba(49, 151, 149, 0.85);
+}
+
+.device-pill {
+  position: relative;
+  padding: 2px 8px;
+  gap: 4px;
+  cursor: default;
+}
+
+.device-pill.selected {
+  border-color: rgba(49, 151, 149, 0.6);
+  background: rgba(49, 151, 149, 0.1);
+}
+
+.device-pill:hover {
+  border-color: rgba(49, 151, 149, 0.85);
+}
+
+.device-pill-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.device-pill-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+
+.device-pill-trigger svg:last-child {
+  width: 14px;
+  height: 14px;
+  opacity: 0.6;
+}
+
+.device-pill-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  margin-top: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  background: rgba(23, 25, 28, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 1000;
+  padding: 4px;
+}
+
+.device-pill-dropdown.open {
+  display: block;
+}
+
+.device-pill-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.device-pill-option svg {
+  width: 14px;
+  height: 14px;
+}
+
+.device-pill-option:hover {
+  background: rgba(49, 151, 149, 0.15);
+}
+
+.device-pill-option.selected {
+  background: rgba(49, 151, 149, 0.1);
 }
 
 .device-card-name {
@@ -228,6 +301,10 @@ button {
 .primary-button:hover {
   border-color: rgba(49, 151, 149, 0.85);
   transform: translateY(-1px);
+}
+
+.icon-button svg {
+  pointer-events: none;
 }
 
 svg {
@@ -479,14 +556,14 @@ svg {
   position: fixed;
   top: 0;
   right: 0;
-  z-index: 30;
+  z-index: 150;
   display: flex;
   flex-direction: column;
   width: min(440px, 100vw);
   height: 100vh;
   padding: 24px;
   border-left: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(23, 25, 28, 0.85);
+  background: rgba(23, 25, 28, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: -24px 0 70px rgba(0, 0, 0, 0.36);
@@ -733,7 +810,8 @@ code {
 }
 
 .device-chip .icon-button.tiny,
-.device-card .icon-button.tiny {
+.device-card .icon-button.tiny,
+.device-pill .icon-button.tiny {
   margin-left: 2px;
   padding: 2px;
   width: 20px;
@@ -742,7 +820,8 @@ code {
 }
 
 .device-chip .icon-button.tiny:hover,
-.device-card .icon-button.tiny:hover {
+.device-card .icon-button.tiny:hover,
+.device-pill .icon-button.tiny:hover {
   opacity: 1;
 }
 
@@ -940,7 +1019,7 @@ code {
 .folder-modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;

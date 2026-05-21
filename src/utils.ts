@@ -1,4 +1,4 @@
-import { state } from "./state";
+import { state, stableIdForSerial } from "./state";
 import type { Device, AndroidApp } from "./types";
 
 export function iconSeed(packageName: string): string {
@@ -27,14 +27,14 @@ export function selectedDevice(): Device | undefined {
 }
 
 export function isFavorited(pkg: string): boolean {
-    const deviceFolders = state.folders[state.selectedSerial] ?? {};
+    const deviceFolders = state.folders[stableIdForSerial(state.selectedSerial)] ?? {};
     return (deviceFolders["favorites"]?.apps.includes(pkg)) ?? false;
 }
 
 export function filteredApps(): AndroidApp[] {
     const query = state.query.trim().toLowerCase();
 
-    const deviceFolders = state.folders[state.selectedSerial] ?? {};
+    const deviceFolders = state.folders[stableIdForSerial(state.selectedSerial)] ?? {};
     const allFolderApps = new Set<string>();
     Object.values(deviceFolders).forEach(f => {
         f.apps.forEach(pkg => allFolderApps.add(pkg));
