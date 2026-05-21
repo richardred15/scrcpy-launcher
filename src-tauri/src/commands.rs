@@ -725,6 +725,7 @@ pub fn launch_app(
         .args(args)
         .env("SDL_VIDEO_WAYLAND_WMCLASS", &app_id)
         .env("SDL_VIDEO_X11_WMCLASS", &app_id)
+        .env("SDL_APP_ID", &app_id)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
