@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use apk_info_axml::{AXML, ARSC};
+use apk_info_axml::{ARSC, AXML};
 use base64::Engine;
 
 use crate::adb::adb_shell;
@@ -93,7 +93,9 @@ pub fn extract_icon_adb(settings: &Settings, serial: &str, package_name: &str) -
     }
     let cd_data = &tail[cd_start..];
 
-    if let Some(icon) = resolve_icon_via_arsc(settings, serial, apk_path, cd_data, package_name, &engine) {
+    if let Some(icon) =
+        resolve_icon_via_arsc(settings, serial, apk_path, cd_data, package_name, &engine)
+    {
         return Some(icon);
     }
 
@@ -102,7 +104,13 @@ pub fn extract_icon_adb(settings: &Settings, serial: &str, package_name: &str) -
     if let Some(ref entry) = icon_entry {
         if entry.filename.ends_with(".xml") {
             return try_adaptive_icon(
-                settings, serial, apk_path, cd_data, package_name, &engine, None,
+                settings,
+                serial,
+                apk_path,
+                cd_data,
+                package_name,
+                &engine,
+                None,
             );
         }
         eprintln!(
@@ -125,7 +133,15 @@ pub fn extract_icon_adb(settings: &Settings, serial: &str, package_name: &str) -
         return Some(format!("data:{};base64,{}", mime, engine.encode(&data)));
     }
 
-    try_adaptive_icon(settings, serial, apk_path, cd_data, package_name, &engine, None)
+    try_adaptive_icon(
+        settings,
+        serial,
+        apk_path,
+        cd_data,
+        package_name,
+        &engine,
+        None,
+    )
 }
 
 fn find_entry_exact_filename(cd_data: &[u8], target: &str) -> Option<ParsedIconEntry> {
@@ -188,9 +204,7 @@ fn resolve_icon_via_arsc(
     package_name: &str,
     engine: &base64::engine::GeneralPurpose,
 ) -> Option<String> {
-    eprintln!(
-        "[scrcpy-launcher] icon: resolving via ARSC for {package_name}"
-    );
+    eprintln!("[scrcpy-launcher] icon: resolving via ARSC for {package_name}");
 
     let manifest_entry = find_entry_exact_filename(cd_data, "AndroidManifest.xml")?;
     let manifest_data = pull_entry(settings, serial, apk_path, &manifest_entry, engine)?;
@@ -215,7 +229,13 @@ fn resolve_icon_via_arsc(
     if icon_ref.ends_with(".xml") {
         let xml_entry = find_entry_exact_filename(cd_data, &icon_ref)?;
         return try_adaptive_icon(
-            settings, serial, apk_path, cd_data, package_name, engine, Some(xml_entry),
+            settings,
+            serial,
+            apk_path,
+            cd_data,
+            package_name,
+            engine,
+            Some(xml_entry),
         );
     }
 
@@ -245,15 +265,11 @@ fn try_adaptive_icon(
     engine: &base64::engine::GeneralPurpose,
     xml_entry: Option<ParsedIconEntry>,
 ) -> Option<String> {
-    eprintln!(
-        "[scrcpy-launcher] icon: trying adaptive icon for {package_name}"
-    );
+    eprintln!("[scrcpy-launcher] icon: trying adaptive icon for {package_name}");
     let xml_entry = xml_entry.or_else(|| find_adaptive_icon_xml(cd_data))?;
     let xml_data = pull_entry(settings, serial, apk_path, &xml_entry, engine)?;
     let (fg_name, bg_name) = parse_adaptive_icon_xml(&xml_data)?;
-    eprintln!(
-        "[scrcpy-launcher] icon: adaptive layers: fg={fg_name}, bg={bg_name}"
-    );
+    eprintln!("[scrcpy-launcher] icon: adaptive layers: fg={fg_name}, bg={bg_name}");
     let fg_entry = find_drawable_entry(cd_data, &fg_name)?;
     let bg_entry = find_drawable_entry(cd_data, &bg_name)?;
     let fg_data = pull_entry(settings, serial, apk_path, &fg_entry, engine)?;
@@ -432,8 +448,7 @@ fn find_adaptive_icon_xml(cd_data: &[u8]) -> Option<ParsedIconEntry> {
         if pos + 46 + name_len <= cd_data.len() {
             let filename = std::str::from_utf8(&cd_data[pos + 46..pos + 46 + name_len]).ok()?;
             let lower = filename.to_lowercase();
-            if lower.contains("anydpi") && lower.contains("ic_") && lower.ends_with(".xml")
-            {
+            if lower.contains("anydpi") && lower.contains("ic_") && lower.ends_with(".xml") {
                 let data_start = local_offset + 30 + name_len as u64 + extra_len as u64;
                 xml_entry = Some(ParsedIconEntry {
                     filename: filename.to_string(),
