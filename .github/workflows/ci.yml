@@ -58,6 +58,8 @@ jobs:
         run: npm run build
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Check formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
@@ -121,6 +123,8 @@ jobs:
             libjavascriptcoregtk-4.1-dev
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -158,6 +162,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Setup Node
         uses: actions/setup-node@v4
