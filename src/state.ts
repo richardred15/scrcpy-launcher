@@ -37,6 +37,8 @@ export type AppState = {
     contextMenu: { x: number; y: number; pkg?: string; folderId?: string; folderName?: string; deviceStableId?: string } | null;
     notificationCounts: Record<string, number>;
     createFolderPkg: string;
+    dragSourcePkg: string;
+    pendingDragPkg: string;
     renameDeviceStableId: string;
     guideAutoShown: boolean;
 };
@@ -74,6 +76,8 @@ export function createState(): AppState {
         contextMenu: null,
         notificationCounts: {},
         createFolderPkg: "",
+        dragSourcePkg: "",
+        pendingDragPkg: "",
         renameDeviceStableId: "",
         guideAutoShown: false,
     };

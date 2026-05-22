@@ -1197,3 +1197,39 @@ code {
   margin: 0;
 }
 
+[draggable="true"] {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.app-card.dragging,
+.modal-app-card.dragging {
+  opacity: 0.4;
+}
+
+.app-card.drag-over {
+  border-color: rgba(123, 212, 208, 0.7);
+  background: rgba(123, 212, 208, 0.12);
+  transform: scale(1.04);
+}
+
+.folder-card.drag-over {
+  border-color: #7bd4d0;
+  background: rgba(123, 212, 208, 0.25);
+  transform: translateY(-2px) scale(1.02);
+}
+
+#folder-modal.drag-over .modal-content {
+  border-color: #e57373;
+  box-shadow: 0 24px 80px rgba(229, 115, 115, 0.2);
+}
+
+#folder-modal.drag-over .modal-overlay {
+  background: rgba(229, 115, 115, 0.15);
+}
+

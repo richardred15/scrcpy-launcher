@@ -150,7 +150,7 @@ export function renderAppIcon(item: AndroidApp): string {
     }
     return `
     <div class="app-icon-wrap">
-      <img class="app-icon" src="${shellEscapeText(item.iconUrl)}" alt="" loading="lazy" />
+      <img class="app-icon" src="${shellEscapeText(item.iconUrl)}" alt="" loading="lazy" draggable="false" />
     </div>
   `;
 }
@@ -199,6 +199,7 @@ export function highlightText(text: string, query: string): string {
 export function createAppCardElement(item: AndroidApp): HTMLButtonElement {
     const btn = document.createElement("button");
     btn.className = "app-card";
+    btn.draggable = true;
     btn.dataset.package = item.packageName;
     btn.dataset.launch = item.packageName;
 
@@ -320,7 +321,7 @@ export function updateFolderModal(): void {
         <div class="modal-grid">
             ${apps.length > 0 
                 ? apps.map(app => `
-                    <div class="modal-app-card" data-package="${app.packageName}" data-launch="${app.packageName}">
+                    <div class="modal-app-card" draggable="true" data-package="${app.packageName}" data-launch="${app.packageName}">
                         ${renderAppIcon(app)}
                         <span>${shellEscapeText(app.label)}</span>
                     </div>
@@ -356,7 +357,7 @@ export function createFolderElement(folder: Folder): HTMLElement {
     const previewIcons = apps.slice(0, 4).map(app => {
         const pkgAttr = `data-package="${shellEscapeText(app.packageName)}"`;
         return app.iconUrl 
-            ? `<img src="${shellEscapeText(app.iconUrl)}" class="folder-preview-icon" ${pkgAttr} />`
+            ? `<img src="${shellEscapeText(app.iconUrl)}" class="folder-preview-icon" draggable="false" ${pkgAttr} />`
             : `<div class="folder-preview-icon fallback" style="background: ${iconSeed(app.packageName)}" ${pkgAttr}></div>`;
     }).join("");
 

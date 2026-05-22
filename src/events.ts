@@ -453,17 +453,123 @@ export function setupEventDelegation(): void {
 
     app.addEventListener("error", (event) => {
         const img = event.target as HTMLImageElement;
-        if (!img.classList.contains("app-icon")) return;
-        const pkg = img.closest<HTMLElement>(".app-card")?.dataset.package;
-        const item = pkg
-            ? state.apps.find((a) => a.packageName === pkg)
-            : undefined;
-        if (!item) return;
-        const fallback = document.createElement("div");
-        fallback.className = "app-icon-fallback";
-        fallback.style.background = iconSeed(item.packageName);
-        fallback.textContent = initials(item.label);
-        img.parentElement?.replaceWith(fallback);
+        if (img.classList.contains("app-icon")) {
+            const pkg = img.closest<HTMLElement>(".app-card")?.dataset.package;
+            const item = pkg
+                ? state.apps.find((a) => a.packageName === pkg)
+                : undefined;
+            if (!item) return;
+            const fallback = document.createElement("div");
+            fallback.className = "app-icon-fallback";
+            fallback.style.background = iconSeed(item.packageName);
+            fallback.textContent = initials(item.label);
+            img.parentElement?.replaceWith(fallback);
+            return;
+        }
+        if (img.classList.contains("folder-preview-icon")) {
+            const pkg = img.dataset.package;
+            const item = pkg
+                ? state.apps.find((a) => a.packageName === pkg)
+                : undefined;
+            if (!item) return;
+            const fallback = document.createElement("div");
+            fallback.className = "folder-preview-icon fallback";
+            fallback.style.background = iconSeed(item.packageName);
+            fallback.dataset.package = pkg;
+            img.replaceWith(fallback);
+        }
+    });
+
+    // Drag-and-drop for folder management
+    app.addEventListener("dragstart", (event) => {
+        const card = (event.target as HTMLElement).closest("[data-package]");
+        if (!card) return;
+        const pkg = (card as HTMLElement).dataset.package!;
+        if (!pkg) return;
+        const dt = event.dataTransfer;
+        if (!dt) return;
+        dt.effectAllowed = "move";
+        dt.setData("text/plain", pkg);
+        dt.setDragImage(card, 32, 32);
+        state.dragSourcePkg = pkg;
+        card.classList.add("dragging");
+    });
+
+    app.addEventListener("dragend", () => {
+        state.dragSourcePkg = "";
+        document.querySelectorAll(".dragging, .drag-over").forEach(el => {
+            el.classList.remove("dragging", "drag-over");
+        });
+    });
+
+    app.addEventListener("dragover", (event) => {
+        const target = event.target as HTMLElement;
+        const appCard = target.closest(".app-card");
+        const folderCard = target.closest(".folder-card");
+        const modal = target.closest("#folder-modal");
+        if (!appCard && !folderCard && !modal) return;
+        event.preventDefault();
+        event.dataTransfer!.dropEffect = "move";
+        document.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
+        if (appCard && (appCard as HTMLElement).dataset.package !== state.dragSourcePkg) {
+            appCard.classList.add("drag-over");
+        } else if (folderCard) {
+            folderCard.classList.add("drag-over");
+        } else if (modal) {
+            modal.classList.add("drag-over");
+        }
+    });
+
+    app.addEventListener("dragleave", (event) => {
+        const target = event.target as HTMLElement;
+        const related = event.relatedTarget as HTMLElement | null;
+        const appCard = target.closest(".app-card");
+        const folderCard = target.closest(".folder-card");
+        const modal = target.closest("#folder-modal");
+        if (appCard && (!related || !appCard.contains(related))) {
+            appCard.classList.remove("drag-over");
+        } else if (folderCard && (!related || !folderCard.contains(related))) {
+            folderCard.classList.remove("drag-over");
+        } else if (modal && (!related || !modal.contains(related))) {
+            modal.classList.remove("drag-over");
+        }
+    });
+
+    app.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const pkg = event.dataTransfer?.getData("text/plain");
+        if (!pkg) return;
+        document.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
+        const target = event.target as HTMLElement;
+        // Drop on folder card → add to folder
+        const folderCard = target.closest(".folder-card");
+        if (folderCard) {
+            const folderId = (folderCard as HTMLElement).dataset.folderId;
+            if (folderId) void addToFolder(folderId, pkg);
+            return;
+        }
+        // Drop inside folder modal → remove from folder if app is in current folder
+        const folderModal = target.closest("#folder-modal");
+        if (folderModal && state.currentFolderId && state.currentFolderId !== "favorites") {
+            const sid = stableIdForSerial(state.selectedSerial);
+            const folders = state.folders[sid] ?? {};
+            const folder = folders[state.currentFolderId];
+            if (folder && folder.apps.includes(pkg)) {
+                void removeFromFolder(state.currentFolderId, pkg);
+                return;
+            }
+        }
+        // Drop on another app card → create folder with both apps
+        const appCard = target.closest(".app-card");
+        if (appCard) {
+            const targetPkg = (appCard as HTMLElement).dataset.package;
+            if (targetPkg && targetPkg !== pkg) {
+                state.pendingDragPkg = pkg;
+                state.contextMenu = null;
+                renderContextMenu();
+                void createFolderPrompt(targetPkg);
+            }
+        }
     });
 }
 

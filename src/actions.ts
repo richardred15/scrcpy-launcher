@@ -120,6 +120,10 @@ export async function confirmCreateFolder(): Promise<void> {
         state.contextMenu = null;
         renderContextMenu();
         await addToFolder(id, pkg);
+        if (state.pendingDragPkg && state.pendingDragPkg !== pkg) {
+            await addToFolder(id, state.pendingDragPkg);
+            state.pendingDragPkg = "";
+        }
     } catch (e: any) {
         state.error = String(e);
         updateErrorBanner();

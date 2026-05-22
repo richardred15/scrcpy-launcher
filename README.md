@@ -15,17 +15,22 @@ Launch Android apps as separate desktop windows via scrcpy virtual displays. Bui
 
 - **One-click launch** — browse and launch all launcher-enabled apps from a connected Android device
 - **Smart focus** — clicking a running app focuses its existing window instead of launching a duplicate
-- **Desktop folders** — organize apps into named folders with an Android-style modal picker; favorites are a built-in folder
 - **Notification badges** — unread counts shown as red badges on app cards, polled from the device every 30s
-- **Wireless ADB** — connect to devices over the network with separate IP/port inputs; remembers saved devices
-- **Adaptive icons** — extracts and composites foreground/background layers from APKs for Samsung and other adaptive-icon apps
+- **Desktop folders** — organize apps into named folders; **drag-and-drop** support with three gestures: app onto app (create folder), app onto folder card (add), app onto folder modal (remove)
+- **Device nicknames** — right-click the device pill to rename any device; nickname persists across USB/wireless switching
+- **Combined device dropdown** — all connections grouped under one pill with USB/WiFi icons; single mirror button
+- **Wireless ADB** — connect over the network; host/port persisted across sessions; saved devices for quick reconnect
+- **Per-app taskbar icons** — separate taskbar entry per launched app on KDE Wayland (via `SDL_APP_ID`) and X11 (via `SDL_VIDEO_WMCLASS`)
+- **Adaptive icons** — extracts and composites foreground/background layers from APKs; Samsung system icons resolved via `resources.arsc` parsing
 - **Web metadata** — resolves app names and icons from Google Play / F-Droid with ADB fallback; caches results to disk
 - **Search** — real-time filter with debounce; searches both app names and package names
-- **Device info** — battery level, temperature, model, and Android version shown in the top bar
-- **Context menu** — right-click any app to add/remove from favorites or move to a folder
-- **Custom binary paths** — configure adb and scrcpy locations in the settings panel
+- **Device info** — battery level, temperature, model, Android version, and charging status in the top bar
+- **Context menu** — right-click any app for folder operations, right-click device pill to rename
+- **Connection guide** — step-by-step modal with RSA auth tips; auto-opens on first launch; **Windows-only download button** to fetch scrcpy + ADB
+- **Custom binary paths** — configure adb and scrcpy locations in settings
 - **Flexible virtual display** — optional `--flex-display` for scrcpy ≥4.0
 - **Kill-on-close** — optionally terminate all scrcpy children when the launcher exits
+- **Error auto-dismiss** — notification bar clears after 5s; dismissed on device reconnection
 
 ## Requirements
 
@@ -52,7 +57,7 @@ Pre-built packages are attached to each release. Download the latest from the [r
 |--------|------|
 | Debian / Ubuntu | `scrcpy-launcher_*.deb` |
 | Fedora / RHEL | `scrcpy-launcher-*.rpm` |
-| Windows | `scrcpy-launcher_*.msi` or `*.exe` (NSIS installer) |
+| Windows | `scrcpy-launcher_*.msi` or `*.exe` (NSIS installer, per-user) |
 
 ## Installation
 
@@ -85,42 +90,48 @@ cargo install kdotool
 # macOS
 brew install android-platform-tools scrcpy
 
-# Windows (not yet supported)
+# Windows
 scoop install adb scrcpy
 ```
+
+On Windows, you can also use the built-in download button in the Connection Guide to fetch scrcpy + ADB directly.
 
 ## Usage
 
 1. Enable **USB debugging** on your Android device
-2. Connect the device and authorize the connection
+2. Connect the device and authorize the connection (accept the RSA prompt)
 3. Launch scrcpy-launcher — it auto-detects the device and lists installed apps
 4. **Click** any app card to open it in a new scrcpy window; click again to focus
-5. **Right-click** an app to add it to Favorites or an existing folder, or create a new folder
-6. **Search** by app name or package name with the search bar
+5. **Drag** an app card onto another to create a folder, onto a folder card to add, or onto an open folder modal to remove
+6. **Right-click** an app to add to Favorites, existing folders, or create a new folder
+7. **Right-click** the device pill to rename any connected device
+8. **Search** by app name or package name with the search bar
 
-For wireless connections, click the Wi-Fi button in the top bar, enter the device IP (port defaults to 5555), and press Enter or click Connect. The launcher remembers saved devices for quick reconnect.
+For wireless connections, click the Wi-Fi button in the top bar, enter the device IP (port defaults to 5555), and press Enter or click Connect. Host and port persist across toggles and restarts.
 
 The settings panel (gear icon) lets you:
 - Point to custom adb/scrcpy binaries
 - Toggle system package visibility, flexible display, and kill-on-close
 - Choose icon source (generated placeholders or web metadata)
-- Set virtual display bounds
+- Set virtual display bounds and per-device overrides
 - Manage saved wireless devices
 
 ## Architecture
 
-The Rust backend manages device communication (ADB), scrcpy process lifecycle, and a background worker that resolves app metadata (names, icons) through a waterfall: on-disk cache → Google Play scrape → F-Droid scrape → APK icon extraction. Results stream to the frontend as per-app events so the grid appears instantly and updates in-place.
+The Rust backend manages device communication (ADB), scrcpy process lifecycle, and a background worker that resolves app metadata (names, icons) through a waterfall: on-disk cache → Google Play scrape → F-Droid scrape → APK icon extraction, with fallback to `resources.arsc` parsing for Samsung system apps. Results stream to the frontend as per-app events so the grid appears instantly and updates in-place.
 
-The frontend is a vanilla TypeScript SPA with a layered rendering pipeline: instant grid from package data, merge cached metadata on mount, then fire-and-forget batch resolution for uncached apps. Window focus uses kdotool on KDE Wayland with an xdotool fallback on X11, both running on background threads.
+The frontend is a vanilla TypeScript SPA with a layered rendering pipeline: instant grid from package data, merge cached metadata on mount, then fire-and-forget batch resolution for uncached apps. Drag-and-drop uses the HTML5 DnD API with CSS visual feedback. Window focus uses kdotool on KDE Wayland with an xdotool fallback on X11, both running on background threads.
+
+Folders are keyed by hardware serial (`ro.serialno`) so they persist across USB and wireless connections for the same physical device.
 
 ## Configuration
 
-Settings are persisted to the OS config directory (`~/.config/dev.scrcpy-launcher/` on Linux). App metadata and icons are cached in `~/.cache/dev.scrcpy-launcher/`.
+Settings are persisted to the OS config directory (`~/.config/dev.scrcpy-launcher/` on Linux, `%APPDATA%\dev.scrcpy-launcher\config` on Windows). App metadata and icons are cached under the app data directory.
 
 ## Known limitations
 
-- **Windows support** — not yet implemented (needs `SetForegroundWindow` for focus)
 - **Samsung API 36+** — `dumpsys package` no longer emits `application-label:`, making web scraping the only source of correct app names on OneUI 7
 - **Split APKs** — only the base APK is used for icon extraction
-- **Samsung system icons** — some system apps only define adaptive icon XMLs with no bundled PNGs; the launcher composites them from extracted layers
+- **Samsung system icons** — some system apps only define adaptive icons with compiled resources (`resources.arsc`); the launcher resolves these via AXMl parsing
 - **scrcpy ≥4.0** required for `--flex-display`
+- **AppImage** — not provided; linuxdeploy requires FUSE which conflicts with NTFS/fuseblk mounts in some setups. Use `.deb` or `.rpm` on Linux.
