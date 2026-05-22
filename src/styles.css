@@ -59,52 +59,86 @@ button {
 
 .shell {
   min-height: 100vh;
-  padding: 14px;
+  padding: 0 14px 14px;
 }
 
-.topbar {
+.titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+  height: 28px;
+  padding: 0 6px 0 12px;
+  user-select: none;
+  -webkit-user-select: none;
+  flex-shrink: 0;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 200px;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .brand-mark {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 20px;
+  height: 20px;
   place-items: center;
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .brand-icon {
-  width: 32px;
-  height: 32px;
+  width: 20px;
+  height: 20px;
   display: block;
 }
 
-.brand h1,
-.brand p,
-.panel-head h2,
-.panel-head p,
-.empty h2,
-.empty p {
+.brand h1 {
   margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.brand h1 {
-  font-size: 17px;
-  line-height: 1.1;
-  letter-spacing: 0;
+.titlebar-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.titlebar-btn {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: #aeb4bc;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.titlebar-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.titlebar-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.titlebar-btn#titlebarClose:hover {
+  background: #e81123;
+  color: #fff;
 }
 
 .version-badge {

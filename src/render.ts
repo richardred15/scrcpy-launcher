@@ -468,7 +468,7 @@ export function updateControlRow(): void {
 
 export function updateStickyState(): void {
     const row = document.querySelector<HTMLElement>(".control-row");
-    const topbar = document.querySelector<HTMLElement>(".topbar");
+    const topbar = document.querySelector<HTMLElement>(".titlebar");
     if (row && topbar) {
         row.classList.toggle(
             "stuck",
@@ -590,13 +590,6 @@ export function renderIcons() {
     } catch (error) {
         console.warn("Unable to render lucide icons", error);
     }
-}
-
-export function updateShellDeviceSerial(): void {
-    const el = document.getElementById("shell-device-serial");
-    if (!el) return;
-    const device = selectedDevice();
-    el.textContent = device ? device.serial : "Android apps as desktop windows";
 }
 
 export function updateTopBar(): void {
@@ -777,20 +770,24 @@ export function initShell(): void {
     const app = document.querySelector<HTMLDivElement>("#app")!;
     app.innerHTML = `
     <main class="shell" id="app-shell" tabindex="-1">
-      <header class="topbar">
+      <header class="titlebar" data-tauri-drag-region>
         <div class="brand">
           <div class="brand-mark"><img src="/app-icon.png" class="brand-icon" alt="" /></div>
           <div>
             <h1>scrcpy Launcher <span class="version-badge">v${version}</span></h1>
-            <p id="shell-device-serial">Android apps as desktop windows</p>
           </div>
         </div>
-        <div class="top-actions" id="top-actions"></div>
+        <div class="titlebar-controls">
+          <button class="titlebar-btn" id="titlebarMinimize" title="Minimize"><svg viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+          <button class="titlebar-btn" id="titlebarMaximize" title="Maximize"><svg viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1" stroke="currentColor" stroke-width="1.5"/></svg></button>
+          <button class="titlebar-btn" id="titlebarClose" title="Close"><svg viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+        </div>
       </header>
 
       <div id="wireless-container"></div>
 
       <section class="control-row">
+        <div class="top-actions" id="top-actions"></div>
         <label class="search-box">
           <i data-lucide="search"></i>
           <input id="search" value="${shellEscapeText(state.query)}" placeholder="Search apps or packages" autocomplete="off" />
@@ -913,7 +910,6 @@ export function initShell(): void {
     if (winDownload) {
         winDownload.style.display = navigator.userAgent.includes("Windows") ? "" : "none";
     }
-    updateShellDeviceSerial();
     updateTopBar();
     updateWirelessForm();
     updateErrorBanner();

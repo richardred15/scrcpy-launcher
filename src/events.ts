@@ -1,4 +1,5 @@
 import { version } from "../package.json";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { state, stableIdForSerial } from "./state";
@@ -25,7 +26,6 @@ import {
     updateControlRow,
     updateOpenStatus,
     updateFocusedApp,
-    updateShellDeviceSerial,
     updateCardElement,
     renderContextMenu,
     openFolder,
@@ -210,6 +210,18 @@ export function setupEventDelegation(): void {
         }
 
         const target = event.target as HTMLElement;
+        if (target.closest("#titlebarMinimize")) {
+            getCurrentWindow().minimize();
+            return;
+        }
+        if (target.closest("#titlebarMaximize")) {
+            getCurrentWindow().toggleMaximize();
+            return;
+        }
+        if (target.closest("#titlebarClose")) {
+            getCurrentWindow().close();
+            return;
+        }
         if (target.closest("#settings")) {
             state.settingsOpen = true;
             updateSettings();
@@ -627,7 +639,7 @@ export async function init(): Promise<void> {
         window.addEventListener("scroll", () => {
             // updateStickyState is imported directly
             const row = document.querySelector<HTMLElement>(".control-row");
-            const topbar = document.querySelector<HTMLElement>(".topbar");
+            const topbar = document.querySelector<HTMLElement>(".titlebar");
             if (row && topbar) {
                 row.classList.toggle(
                     "stuck",
@@ -664,7 +676,6 @@ export async function init(): Promise<void> {
             }
 
             updateTopBar();
-            updateShellDeviceSerial();
 
             if (
                 !state.selectedSerial &&
