@@ -182,6 +182,7 @@ describe("doWirelessConnect", () => {
             lastWirelessPort: "5555",
             folders: {},
             deviceNicknames: {},
+            ignoredUpdateVersion: "",
         };
         vi.mocked(invoke).mockResolvedValue("connected to 192.168.1.100:5555");
         await doWirelessConnect();
@@ -317,6 +318,7 @@ describe("loadSettings", () => {
             lastWirelessPort: "5555",
             folders: { "abc": { games: { id: "games", name: "Games", apps: ["com.a"] } } },
             deviceNicknames: {},
+            ignoredUpdateVersion: "",
         };
         vi.mocked(invoke).mockResolvedValue(settings);
         await loadSettings();
@@ -352,6 +354,7 @@ describe("saveSettings", () => {
             lastWirelessPort: "5555",
             folders: {},
             deviceNicknames: {},
+            ignoredUpdateVersion: "",
         };
         vi.mocked(invoke).mockImplementation(async (_cmd: string, args?: any) => ({ ...args?.settings }));
         await saveSettings();

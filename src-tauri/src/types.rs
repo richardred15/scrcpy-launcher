@@ -38,6 +38,8 @@ pub struct Settings {
     pub folders: HashMap<String, HashMap<String, Folder>>,
     #[serde(default)]
     pub device_nicknames: HashMap<String, String>,
+    #[serde(default)]
+    pub ignored_update_version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

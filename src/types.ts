@@ -20,6 +20,7 @@ export type SettingsState = {
     lastWirelessPort: string;
     folders: Record<string, Record<string, Folder>>;
     deviceNicknames: Record<string, string>;
+    ignoredUpdateVersion: string;
 };
 
 export type BinaryStatus = {

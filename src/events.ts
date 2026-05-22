@@ -1,3 +1,4 @@
+import { version } from "../package.json";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { state, stableIdForSerial } from "./state";
@@ -55,6 +56,8 @@ import {
     loadSettings,
     loadWirelessDevices,
     installScrcpyWindows,
+    checkForUpdates,
+    dismissUpdate,
 } from "./actions";
 
 export function setupEventDelegation(): void {
@@ -187,6 +190,21 @@ export function setupEventDelegation(): void {
             }
             if (t.closest("#confirmRenameDevice")) {
                 void confirmRenameDevice();
+                return;
+            }
+        }
+
+        const updateModal = document.getElementById("update-modal");
+        if (updateModal?.classList.contains("open")) {
+            const t = event.target as HTMLElement;
+            if (t.closest("#closeUpdateModal") || (t.closest("#update-modal") && t.classList.contains("modal-overlay"))) {
+                updateModal.classList.remove("open");
+                return;
+            }
+            if (t.closest("#ignoreUpdate")) {
+                const ver = (t.closest("#ignoreUpdate") as HTMLElement).getAttribute("data-version");
+                if (ver) void dismissUpdate(ver);
+                updateModal.classList.remove("open");
                 return;
             }
         }
@@ -573,6 +591,18 @@ export function setupEventDelegation(): void {
     });
 }
 
+async function checkForUpdatesAndShow(): Promise<void> {
+    const latest = await checkForUpdates();
+    if (!latest) return;
+    const modal = document.getElementById("update-modal");
+    if (!modal) return;
+    const msg = document.getElementById("updateMessage");
+    if (msg) msg.textContent = `scrcpy Launcher ${latest} is available. You're on v${version}. Would you like to download the update?`;
+    const ignoreBtn = document.getElementById("ignoreUpdate");
+    if (ignoreBtn) ignoreBtn.setAttribute("data-version", latest);
+    modal.classList.add("open");
+}
+
 export async function init(): Promise<void> {
     try {
         window.addEventListener("error", (event) => {
@@ -588,6 +618,7 @@ export async function init(): Promise<void> {
         initShell();
         await loadSettings();
         updateSettings();
+        await checkForUpdatesAndShow();
 
         const openApps = await invoke<string[]>("get_open_apps");
         state.openApps = new Set(openApps);

@@ -23,6 +23,7 @@ pub fn default_settings() -> Settings {
         last_wireless_port: "5555".into(),
         folders: HashMap::new(), // HashMap<serial, HashMap<folder_id, Folder>>
         device_nicknames: HashMap::new(),
+        ignored_update_version: String::new(),
     }
 }
 

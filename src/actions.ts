@@ -467,3 +467,21 @@ export async function launch(item: AndroidApp): Promise<void> {
         updateAppGrid();
     }
 }
+
+export async function checkForUpdates(): Promise<string> {
+    try {
+        return await invoke<string>("check_for_updates");
+    } catch {
+        return "";
+    }
+}
+
+export async function dismissUpdate(version: string): Promise<void> {
+    if (!state.settings) return;
+    state.settings.ignoredUpdateVersion = version;
+    try {
+        state.settings = await invoke<SettingsState>("save_settings", { settings: state.settings });
+    } catch {
+        // best effort
+    }
+}

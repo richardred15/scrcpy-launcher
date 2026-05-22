@@ -1,3 +1,4 @@
+import { version } from "../package.json";
 import { state, stableIdForSerial } from "./state";
 import type { AndroidApp, Folder, BinaryStatus, Device } from "./types";
 import {
@@ -780,7 +781,7 @@ export function initShell(): void {
         <div class="brand">
           <div class="brand-mark"><img src="/app-icon.png" class="brand-icon" alt="" /></div>
           <div>
-            <h1>scrcpy Launcher</h1>
+            <h1>scrcpy Launcher <span class="version-badge">v${version}</span></h1>
             <p id="shell-device-serial">Android apps as desktop windows</p>
           </div>
         </div>
@@ -846,6 +847,23 @@ export function initShell(): void {
             <div class="create-folder-actions">
               <button class="empty-button" id="cancelRenameDevice">Cancel</button>
               <button class="empty-button primary" id="confirmRenameDevice">Rename</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="update-modal" class="folder-modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width:400px">
+          <div class="modal-head">
+            <h2>Update available</h2>
+            <button class="icon-button" id="closeUpdateModal" title="Dismiss"><i data-lucide="x"></i></button>
+          </div>
+          <div class="create-folder-body">
+            <p style="color:#aeb4bc;margin:0;line-height:1.5" id="updateMessage">A new version is available.</p>
+            <div class="create-folder-actions">
+              <button class="empty-button" id="ignoreUpdate">Ignore this version</button>
+              <a class="empty-button primary" id="downloadUpdate" href="https://github.com/richardred15/scrcpy-launcher/releases/latest" target="_blank" style="text-decoration:none">Download</a>
             </div>
           </div>
         </div>

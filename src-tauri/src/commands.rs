@@ -745,3 +745,62 @@ pub fn launch_app(
         }
     }
 }
+
+// ── Update Check ─────────────────────────────────────────────────────────────
+
+fn parse_version(v: &str) -> Vec<u32> {
+    v.trim_start_matches('v')
+        .split('.')
+        .filter_map(|s| s.parse::<u32>().ok())
+        .collect()
+}
+
+#[tauri::command]
+pub fn check_for_updates(app: tauri::AppHandle) -> Result<String, String> {
+    let settings = read_settings(&app);
+    let current = env!("CARGO_PKG_VERSION");
+    let current_parts = parse_version(current);
+    if current_parts.len() != 3 {
+        return Ok(String::new());
+    }
+
+    let url = "https://api.github.com/repos/richardred15/scrcpy-launcher/releases/latest";
+    let response = ureq::get(url)
+        .header("Accept", "application/vnd.github.v3+json")
+        .header("User-Agent", "scrcpy-launcher")
+        .call()
+        .map_err(|e| format!("GitHub API error: {e}"))?;
+
+    let body = response
+        .into_body()
+        .read_to_vec()
+        .map_err(|e| format!("Failed to read response: {e}"))?;
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).map_err(|e| format!("JSON parse error: {e}"))?;
+
+    let latest_tag = json["tag_name"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    if latest_tag.is_empty() {
+        return Ok(String::new());
+    }
+
+    let latest = latest_tag.trim_start_matches('v');
+    if latest == settings.ignored_update_version {
+        return Ok(String::new());
+    }
+
+    let latest_parts = parse_version(&latest_tag);
+    if latest_parts.len() != 3 {
+        return Ok(String::new());
+    }
+
+    // Compare major.minor.patch
+    if latest_parts > current_parts {
+        Ok(latest_tag)
+    } else {
+        Ok(String::new())
+    }
+}

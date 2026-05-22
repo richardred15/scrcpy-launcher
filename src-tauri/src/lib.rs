@@ -76,6 +76,7 @@ pub fn run() {
             worker::trigger_load_apps,
             commands::install_scrcpy_windows,
             commands::set_device_nickname,
+            commands::check_for_updates,
         ])
         .setup(move |a| {
             cache::init(a.handle());

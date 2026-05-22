@@ -246,6 +246,7 @@ describe("renderSettings", () => {
             lastWirelessPort: "5555",
             folders: {},
             deviceNicknames: {},
+            ignoredUpdateVersion: "",
         };
         state.devices = [{ serial: "abc", state: "device", wireless: false, stableId: "abc" }];
         const html = renderSettings();
