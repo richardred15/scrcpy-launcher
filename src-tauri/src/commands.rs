@@ -779,10 +779,7 @@ pub fn check_for_updates(app: tauri::AppHandle) -> Result<String, String> {
     let json: serde_json::Value =
         serde_json::from_slice(&body).map_err(|e| format!("JSON parse error: {e}"))?;
 
-    let latest_tag = json["tag_name"]
-        .as_str()
-        .unwrap_or("")
-        .to_string();
+    let latest_tag = json["tag_name"].as_str().unwrap_or("").to_string();
     if latest_tag.is_empty() {
         return Ok(String::new());
     }
