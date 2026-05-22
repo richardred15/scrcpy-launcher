@@ -11,12 +11,9 @@ describe("createState", () => {
         expect(s.apps).toEqual([]);
         expect(s.cacheMeta).toBeNull();
         expect(s.resolveQueue).toEqual(new Set());
-        expect(s.appLoadToken).toBe(0);
-        expect(s.lastReadyDeviceKey).toBe("");
         expect(s.query).toBe("");
         expect(s.loadingDevices).toBe(true);
         expect(s.loadingApps).toBe(false);
-        expect(s.loadingIcons).toBe(false);
         expect(s.settingsOpen).toBe(false);
         expect(s.error).toBe("");
         expect(s.wirelessConnectOpen).toBe(false);

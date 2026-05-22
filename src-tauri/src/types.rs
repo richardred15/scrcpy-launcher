@@ -125,3 +125,12 @@ pub struct ParsedIconEntry {
     pub compressed_size: u64,
     pub data_start: u64,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MdnsDiscoveredDevice {
+    pub service_name: String,
+    pub service_type: String,
+    pub host: String,
+    pub port: u16,
+}

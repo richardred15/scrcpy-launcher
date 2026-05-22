@@ -5,19 +5,45 @@ use std::time::Duration;
 use tauri::Emitter;
 
 use crate::adb;
+use crate::discovery;
 use crate::runtime::get_open_apps_list;
 use crate::settings::read_settings;
 use crate::types::{AndroidApp, AppsLoadedEvent, BinaryStatus, Device, Settings, ToolStatus};
 
 pub struct RefreshFlag(pub Arc<AtomicBool>);
 
+fn run_mdns_scan(settings: &Settings, devices: &[Device], app_handle: &tauri::AppHandle) {
+    let discovered = discovery::discover_adb_devices();
+    let connected_serials: Vec<String> = devices.iter().map(|d| d.serial.clone()).collect();
+    for svc in &discovered {
+        if svc.service_type == "_adb-tls-connect._tcp" {
+            let host_port = format!("{}:{}", svc.host, svc.port);
+            if !connected_serials
+                .iter()
+                .any(|s| s.contains(&host_port) || s.contains(&svc.host))
+            {
+                let _ = adb::adb(settings, None, &["connect", &host_port]);
+            }
+        }
+    }
+    let _ = app_handle.emit("wireless-scan-result", &discovered);
+}
+
 pub fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Arc<AtomicBool>) {
+    let mut mdns_counter: u32 = 0;
+    let mut adb_server_restarted = false;
     loop {
         if exit.load(Ordering::Relaxed) {
             return;
         }
 
         let settings = read_settings(&app_handle);
+
+        // On first iteration, restart ADB server so it picks up ADB_MDNS_OPENSCREEN
+        if !adb_server_restarted {
+            adb_server_restarted = true;
+            let _ = adb::adb(&settings, None, &["kill-server"]);
+        }
 
         let tools = compute_tool_status(&settings);
         let _ = app_handle.emit("tool-status-updated", &tools);
@@ -28,11 +54,20 @@ pub fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Ar
         let open_apps = get_open_apps_list();
         let _ = app_handle.emit("open-apps-updated", &open_apps);
 
+        mdns_counter += 1;
+        if mdns_counter >= 6 {
+            mdns_counter = 0;
+            run_mdns_scan(&settings, &devices, &app_handle);
+        }
+
         for _ in 0..100 {
             if exit.load(Ordering::Relaxed) {
                 return;
             }
             if flag.swap(false, Ordering::Relaxed) {
+                let settings = read_settings(&app_handle);
+                let devices = compute_devices(&settings);
+                run_mdns_scan(&settings, &devices, &app_handle);
                 break;
             }
             std::thread::sleep(Duration::from_millis(100));

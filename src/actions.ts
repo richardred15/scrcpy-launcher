@@ -48,7 +48,7 @@ export async function removeFromFolder(folderId: string, pkg: string): Promise<v
         }
         updateAppGrid();
         updateFolderModal();
-    } catch (e: any) {
+    } catch (e: unknown) {
         state.error = String(e);
         updateErrorBanner();
     }
@@ -65,7 +65,7 @@ export async function deleteFolder(folderId: string): Promise<void> {
             openFolder(null);
         }
         updateAppGrid();
-    } catch (e: any) {
+    } catch (e: unknown) {
         state.error = String(e);
         updateErrorBanner();
     }
@@ -95,7 +95,7 @@ export async function addToFolder(folderId: string, pkg: string): Promise<void> 
             }
         }
         updateAppGrid();
-    } catch (e: any) {
+    } catch (e: unknown) {
         state.error = String(e);
         updateErrorBanner();
     }
@@ -124,7 +124,7 @@ export async function confirmCreateFolder(): Promise<void> {
             await addToFolder(id, state.pendingDragPkg);
             state.pendingDragPkg = "";
         }
-    } catch (e: any) {
+    } catch (e: unknown) {
         state.error = String(e);
         updateErrorBanner();
     }
@@ -132,6 +132,32 @@ export async function confirmCreateFolder(): Promise<void> {
 
 export async function createFolderPrompt(pkg: string): Promise<void> {
     openCreateFolderModal(pkg);
+}
+
+export async function confirmRenameFolder(): Promise<void> {
+    const folderId = state.renameFolderId;
+    const serial = state.selectedSerial;
+    if (!folderId || !serial) return;
+    const input = document.getElementById("renameFolderName") as HTMLInputElement;
+    const newName = input?.value.trim();
+    if (!newName) {
+        input?.focus();
+        return;
+    }
+    closeRenameFolderModal();
+    try {
+        await invoke("rename_folder", { serial, folderId, newName });
+        const sid = stableIdForSerial(serial);
+        const folder = state.folders[sid]?.[folderId];
+        if (folder) {
+            folder.name = newName;
+        }
+        updateAppGrid();
+        updateFolderModal();
+    } catch (e: unknown) {
+        state.error = String(e);
+        updateErrorBanner();
+    }
 }
 
 export async function confirmRenameDevice(): Promise<void> {
@@ -150,7 +176,7 @@ export async function confirmRenameDevice(): Promise<void> {
             }
         }
         updateTopBar();
-    } catch (e: any) {
+    } catch (e: unknown) {
         state.error = String(e);
         updateErrorBanner();
     }
@@ -181,7 +207,6 @@ export async function doWirelessConnect(): Promise<void> {
     updateErrorBanner();
     try {
         const result = await invoke<string>("adb_connect", { hostPort });
-        console.log("adb_connect:", result);
         if (
             result.includes("already connected") ||
             result.includes("connected to")
@@ -193,6 +218,7 @@ export async function doWirelessConnect(): Promise<void> {
             state.wirelessConnectOpen = false;
             state.wirelessConnectResult = null;
             state.wirelessConnectMsg = "";
+            updateWirelessForm();
             await refreshAll();
             await loadWirelessDevices();
         } else {
@@ -201,7 +227,7 @@ export async function doWirelessConnect(): Promise<void> {
             state.wirelessConnecting = false;
             updateWirelessForm();
         }
-    } catch (e: any) {
+    } catch (e: unknown) {
         state.wirelessConnectResult = "error";
         state.wirelessConnectMsg = typeof e === "string" ? e : String(e);
         state.wirelessConnecting = false;
@@ -220,7 +246,7 @@ export async function doWirelessDisconnect(hostPort: string): Promise<void> {
         updateTopBar();
         updateSettings();
         updateErrorBanner();
-    } catch (e: any) {
+    } catch (e: unknown) {
         state.error = String(e);
         updateErrorBanner();
     }
@@ -243,7 +269,7 @@ export async function doWirelessReconnect(hostPort: string): Promise<void> {
             state.error = result;
             updateErrorBanner();
         }
-    } catch (e: any) {
+    } catch (e: unknown) {
         state.error = String(e);
         updateErrorBanner();
     }
@@ -269,7 +295,7 @@ export async function restartAdb(): Promise<void> {
     updateErrorBanner();
     try {
         await invoke("adb_restart_server");
-    } catch (e: any) {
+    } catch (e: unknown) {
         state.error = String(e);
         updateErrorBanner();
         return;
@@ -375,19 +401,16 @@ export async function loadCachedMetaAndResolve(): Promise<void> {
             filled++;
         }
     }
-    console.log(`[meta] cache filled ${filled}/${state.apps.length} apps`);
     updateAppGrid();
 
     const uncached = state.apps
         .filter((a) => !state.cacheMeta!.has(a.packageName))
         .map((a) => a.packageName);
     if (uncached.length === 0) {
-        console.log("[meta] all apps cached");
         return;
     }
     state.resolveQueue = new Set(uncached);
     updateControlRow();
-    console.log(`[meta] resolving ${uncached.length} uncached apps`);
     invoke("resolve_app_batch", {
         serial: state.selectedSerial,
         pkgs: uncached,
@@ -414,22 +437,6 @@ export async function installScrcpyWindows(): Promise<void> {
 export async function launchMirror(serial: string): Promise<void> {
     try {
         await invoke("launch_mirror", { serial });
-    } catch (error) {
-        state.error = String(error);
-        updateErrorBanner();
-    }
-}
-
-export async function launchMirrorAll(): Promise<void> {
-    const serials = state.devices
-        .filter(d => d.state === "device")
-        .map(d => d.serial);
-    if (serials.length < 1) return;
-    if (serials.length === 1) {
-        return launchMirror(serials[0]);
-    }
-    try {
-        await invoke("launch_mirror_multi", { serials });
     } catch (error) {
         state.error = String(error);
         updateErrorBanner();

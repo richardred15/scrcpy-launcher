@@ -581,6 +581,90 @@ svg {
   font-size: 22px;
 }
 
+.discovered-devices {
+  margin: 20px auto 0;
+  max-width: 400px;
+  width: 100%;
+}
+
+.discovered-devices h3 {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7b8491;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  text-align: center;
+}
+
+.discovered-devices.scanning p {
+  font-size: 13px;
+  color: #aeb4bc;
+  text-align: center;
+  margin: 0;
+}
+
+.discovered-device {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  margin-bottom: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.discovered-device:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.discovered-device-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.discovered-device-addr {
+  font-size: 14px;
+  font-weight: 500;
+  color: #eef0f3;
+  letter-spacing: 0.2px;
+}
+
+.discovered-device-type {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.discovered-device-type.ready {
+  color: #7bd4d0;
+  background: rgba(123, 212, 208, 0.12);
+}
+
+.discovered-device-type.pairing {
+  color: #f5a623;
+  background: rgba(245, 166, 35, 0.12);
+}
+
+.discovered-device-type.legacy {
+  color: #aeb4bc;
+  background: rgba(174, 180, 188, 0.12);
+}
+
+.discovered-device .empty-button {
+  padding: 5px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 .scrim {
   position: fixed;
   inset: 0;

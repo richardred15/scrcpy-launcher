@@ -1,6 +1,7 @@
 mod adb;
 mod cache;
 mod commands;
+mod discovery;
 mod icon;
 mod platform;
 mod runtime;
@@ -61,7 +62,6 @@ pub fn run() {
             commands::delete_folder,
             commands::launch_app,
             commands::launch_mirror,
-            commands::launch_mirror_multi,
             commands::adb_connect,
             commands::adb_disconnect,
             commands::adb_restart_server,

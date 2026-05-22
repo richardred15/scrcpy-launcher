@@ -1,4 +1,4 @@
-import type { SettingsState, ToolStatus, Device, AndroidApp, CachedAppMeta, Folder } from "./types";
+import type { SettingsState, ToolStatus, Device, AndroidApp, CachedAppMeta, Folder, MdnsDiscoveredDevice } from "./types";
 
 export function stableIdForSerial(serial: string): string {
     const device = state.devices.find(d => d.serial === serial);
@@ -13,12 +13,9 @@ export type AppState = {
     apps: AndroidApp[];
     cacheMeta: Map<string, CachedAppMeta> | null;
     resolveQueue: Set<string>;
-    appLoadToken: number;
-    lastReadyDeviceKey: string;
     query: string;
     loadingDevices: boolean;
     loadingApps: boolean;
-    loadingIcons: boolean;
     settingsOpen: boolean;
     error: string;
     wirelessConnectOpen: boolean;
@@ -40,7 +37,11 @@ export type AppState = {
     dragSourcePkg: string;
     pendingDragPkg: string;
     renameDeviceStableId: string;
+    renameFolderId: string;
+    renameFolderName: string;
     guideAutoShown: boolean;
+    discoveredDevices: MdnsDiscoveredDevice[];
+    scanningNetwork: boolean;
 };
 
 export function createState(): AppState {
@@ -52,12 +53,9 @@ export function createState(): AppState {
         apps: [],
         cacheMeta: null,
         resolveQueue: new Set(),
-        appLoadToken: 0,
-        lastReadyDeviceKey: "",
         query: "",
         loadingDevices: true,
         loadingApps: false,
-        loadingIcons: false,
         settingsOpen: false,
         error: "",
         wirelessConnectOpen: false,
@@ -79,7 +77,11 @@ export function createState(): AppState {
         dragSourcePkg: "",
         pendingDragPkg: "",
         renameDeviceStableId: "",
+        renameFolderId: "",
+        renameFolderName: "",
         guideAutoShown: false,
+        discoveredDevices: [],
+        scanningNetwork: false,
     };
 }
 

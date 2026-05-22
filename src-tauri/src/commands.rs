@@ -605,27 +605,6 @@ pub fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResu
     launch_mirror_inner(&app, &settings, &serial)
 }
 
-#[tauri::command]
-pub fn launch_mirror_multi(
-    app: tauri::AppHandle,
-    serials: Vec<String>,
-) -> Result<Vec<LaunchResult>, String> {
-    let settings = read_settings(&app);
-    let mut results = Vec::with_capacity(serials.len());
-    for serial in &serials {
-        match launch_mirror_inner(&app, &settings, serial) {
-            Ok(result) => results.push(result),
-            Err(e) => {
-                eprintln!("[scrcpy-launcher] launch_mirror_multi: {serial} failed: {e}");
-                results.push(LaunchResult {
-                    used_flex_display: false,
-                    message: Some(e),
-                });
-            }
-        }
-    }
-    Ok(results)
-}
 
 #[tauri::command]
 pub fn launch_app(

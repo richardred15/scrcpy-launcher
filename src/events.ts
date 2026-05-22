@@ -8,11 +8,10 @@ import type {
     Device,
     AppsLoadedEvent,
     AppMetaResolvedEvent,
+    MdnsDiscoveredDevice,
 } from "./types";
 import {
-    selectedDevice,
     filteredApps,
-    readyDeviceKey,
     iconSeed,
     initials,
 } from "./utils";
@@ -20,10 +19,12 @@ import {
     initShell,
     updateAppGrid,
     updateTopBar,
+    updateDeviceDropdown,
     updateWirelessForm,
     updateErrorBanner,
     updateSettings,
     updateControlRow,
+    updateStickyState,
     updateOpenStatus,
     updateFocusedApp,
     updateCardElement,
@@ -32,6 +33,8 @@ import {
     closeCreateFolderModal,
     openRenameDeviceModal,
     closeRenameDeviceModal,
+    openRenameFolderModal,
+    closeRenameFolderModal,
     showConnectionGuide,
 } from "./render";
 import {
@@ -52,6 +55,7 @@ import {
     removeFromFolder,
     deleteFolder,
     confirmRenameDevice,
+    confirmRenameFolder,
     closeSettings,
     loadSettings,
     loadWirelessDevices,
@@ -136,6 +140,10 @@ export function setupEventDelegation(): void {
                 } else if (action === "rename-device") {
                     const stableId = item.getAttribute("data-stable-id")!;
                     openRenameDeviceModal(stableId);
+                } else if (action === "rename-folder") {
+                    const folderId = item.getAttribute("data-folder-id")!;
+                    const folderName = item.getAttribute("data-folder-name") ?? "";
+                    openRenameFolderModal(folderId, folderName);
                 }
                 state.contextMenu = null;
                 renderContextMenu();
@@ -194,6 +202,18 @@ export function setupEventDelegation(): void {
             }
         }
 
+        if (state.renameFolderId) {
+            const t = event.target as HTMLElement;
+            if (t.closest("#closeRenameFolder") || t.closest("#cancelRenameFolder") || t.classList.contains("modal-overlay")) {
+                closeRenameFolderModal();
+                return;
+            }
+            if (t.closest("#confirmRenameFolder")) {
+                void confirmRenameFolder();
+                return;
+            }
+        }
+
         const updateModal = document.getElementById("update-modal");
         if (updateModal?.classList.contains("open")) {
             const t = event.target as HTMLElement;
@@ -205,6 +225,11 @@ export function setupEventDelegation(): void {
                 const ver = (t.closest("#ignoreUpdate") as HTMLElement).getAttribute("data-version");
                 if (ver) void dismissUpdate(ver);
                 updateModal.classList.remove("open");
+                return;
+            }
+            if (t.closest("#downloadUpdate")) {
+                updateModal.classList.remove("open");
+                window.open("https://github.com/richardred15/scrcpy-launcher/releases/latest", "_blank");
                 return;
             }
         }
@@ -357,7 +382,22 @@ export function setupEventDelegation(): void {
         }
 
         if (target.closest("#scanDevices")) {
-            void refreshAll();
+            state.scanningNetwork = true;
+            updateAppGrid();
+            invoke("trigger_refresh");
+            return;
+        }
+
+        const mdnsConnect = (target as HTMLElement).closest("[data-connect-mdns]");
+        if (mdnsConnect) {
+            const hostPort = (mdnsConnect as HTMLElement).getAttribute("data-connect-mdns");
+            if (hostPort) {
+                state.wirelessHost = hostPort.split(":")[0];
+                state.wirelessPort = hostPort.split(":")[1] || "5555";
+                state.wirelessConnectOpen = true;
+                updateWirelessForm();
+                void doWirelessConnect();
+            }
             return;
         }
 
@@ -424,6 +464,52 @@ export function setupEventDelegation(): void {
             if (item) void launch(item);
         }
 
+        if ((key === "Escape") && !isInput) {
+            if (state.settingsOpen) {
+                closeSettings();
+            } else if (state.wirelessConnectOpen) {
+                state.wirelessConnectOpen = false;
+                updateWirelessForm();
+            } else if (state.contextMenu) {
+                state.contextMenu = null;
+                renderContextMenu();
+            } else if (state.currentFolderId) {
+                openFolder(null);
+            } else if (state.createFolderPkg) {
+                closeCreateFolderModal();
+            } else if (state.renameFolderId) {
+                closeRenameFolderModal();
+            } else if (state.renameDeviceStableId) {
+                closeRenameDeviceModal();
+            } else {
+                const guide = document.getElementById("guide-modal");
+                if (guide?.classList.contains("open")) {
+                    guide.classList.remove("open");
+                }
+                const update = document.getElementById("update-modal");
+                if (update?.classList.contains("open")) {
+                    update.classList.remove("open");
+                }
+            }
+            return;
+        }
+
+        if ((key === "r" || key === "R") && (event as KeyboardEvent).ctrlKey) {
+            event.preventDefault();
+            void refreshAll();
+            return;
+        }
+
+        if ((key === "f" || key === "F") && (event as KeyboardEvent).ctrlKey) {
+            event.preventDefault();
+            const searchInput = document.getElementById("search") as HTMLInputElement | null;
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+            return;
+        }
+
         if (
             key === "Enter" &&
             state.createFolderPkg &&
@@ -440,14 +526,6 @@ export function setupEventDelegation(): void {
             (activeEl as HTMLInputElement).id === "renameDeviceName"
         ) {
             void confirmRenameDevice();
-        }
-
-        if (key === "Escape" && state.createFolderPkg) {
-            closeCreateFolderModal();
-        }
-
-        if (key === "Escape" && state.renameDeviceStableId) {
-            closeRenameDeviceModal();
         }
 
         if (key === "Backspace" && state.query !== "") {
@@ -636,17 +714,7 @@ export async function init(): Promise<void> {
         state.openApps = new Set(openApps);
         updateAppGrid();
 
-        window.addEventListener("scroll", () => {
-            // updateStickyState is imported directly
-            const row = document.querySelector<HTMLElement>(".control-row");
-            const topbar = document.querySelector<HTMLElement>(".titlebar");
-            if (row && topbar) {
-                row.classList.toggle(
-                    "stuck",
-                    topbar.getBoundingClientRect().bottom <= 0,
-                );
-            }
-        }, { passive: true });
+        window.addEventListener("scroll", updateStickyState, { passive: true });
 
         await listen<ToolStatus>("tool-status-updated", (event) => {
             state.tools = event.payload;
@@ -662,10 +730,7 @@ export async function init(): Promise<void> {
         await listen<Device[]>("devices-updated", (event) => {
             const devices = event.payload;
             const previousSerial = state.selectedSerial;
-            const previousKey = state.lastReadyDeviceKey;
-            const nextKey = readyDeviceKey(devices);
             state.devices = devices;
-            state.lastReadyDeviceKey = nextKey;
             state.loadingDevices = false;
 
             const ready = devices.filter((d) => d.state === "device");
@@ -675,44 +740,33 @@ export async function init(): Promise<void> {
                 state.selectedSerial = ready[0]?.serial || "";
             }
 
-            updateTopBar();
-
-            if (
-                !state.selectedSerial &&
-                state.wirelessDevices.length === 0 &&
-                !state.guideAutoShown
-            ) {
-                state.guideAutoShown = true;
-                showConnectionGuide();
-            }
-
             const selectedChanged = previousSerial !== state.selectedSerial;
-            const devicesChanged = previousKey !== nextKey;
 
-            if (!state.selectedSerial) {
-                state.apps = [];
-                state.resolveQueue = new Set();
-                state.focusedAppIndex = null;
-                state.notificationCounts = {};
-                state.loadingApps = false;
-                if (selectedChanged) {
+            if (selectedChanged) {
+                updateTopBar();
+                if (!state.selectedSerial) {
+                    state.apps = [];
+                    state.resolveQueue = new Set();
+                    state.focusedAppIndex = null;
+                    state.notificationCounts = {};
+                    state.loadingApps = false;
                     state.error = "Device disconnected";
                     updateErrorBanner();
-                }
-                if (notifInterval) {
-                    clearInterval(notifInterval);
-                    notifInterval = null;
-                }
-                updateAppGrid();
-                updateControlRow();
-            } else {
-                if (state.error) {
-                    state.error = "";
-                    updateErrorBanner();
-                }
-                if (selectedChanged || devicesChanged) {
+                    if (notifInterval) {
+                        clearInterval(notifInterval);
+                        notifInterval = null;
+                    }
+                    updateAppGrid();
+                    updateControlRow();
+                } else {
+                    if (state.error) {
+                        state.error = "";
+                        updateErrorBanner();
+                    }
                     beginLoadApps(state.selectedSerial);
                 }
+            } else {
+                updateDeviceDropdown();
             }
         });
 
@@ -757,7 +811,21 @@ export async function init(): Promise<void> {
         await listen("app-meta-batch-complete", () => {
             state.resolveQueue.clear();
             updateControlRow();
-            console.log("[meta] batch complete");
+        });
+
+        await listen<MdnsDiscoveredDevice[]>("wireless-scan-result", (event) => {
+            state.discoveredDevices = event.payload;
+            state.scanningNetwork = false;
+            updateAppGrid();
+            if (
+                !state.selectedSerial &&
+                state.wirelessDevices.length === 0 &&
+                state.discoveredDevices.length === 0 &&
+                !state.guideAutoShown
+            ) {
+                state.guideAutoShown = true;
+                showConnectionGuide();
+            }
         });
 
         invoke("trigger_refresh");

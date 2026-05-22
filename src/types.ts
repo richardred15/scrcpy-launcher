@@ -76,3 +76,10 @@ export type AppsLoadedEvent = {
     serial: string;
     apps: AndroidApp[];
 };
+
+export type MdnsDiscoveredDevice = {
+    serviceName: string;
+    serviceType: string;
+    host: string;
+    port: number;
+};

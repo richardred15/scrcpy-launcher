@@ -3,9 +3,10 @@ use std::sync::OnceLock;
 
 use crate::types::Settings;
 
-#[allow(unused_mut)]
 pub fn no_window_command(program: &str) -> Command {
     let mut cmd = Command::new(program);
+    cmd.env("ADB_MDNS_OPENSCREEN", "1");
+    cmd.env("ADB_MDNS_AUTO_CONNECT", "adb-tls-connect");
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

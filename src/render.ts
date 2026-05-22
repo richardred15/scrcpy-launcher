@@ -380,6 +380,27 @@ export function updateAppGrid(): void {
     if (!grid) return;
 
     if (!state.selectedSerial) {
+        const discoveredHtml = state.discoveredDevices.length > 0
+            ? `<div class="discovered-devices">
+              <h3>Devices on network</h3>
+              ${state.discoveredDevices.filter((d, i, a) => a.findIndex(x => x.host === d.host && x.port === d.port) === i).map(d => {
+                  const isTlsConnect = d.serviceType === "_adb-tls-connect._tcp";
+                  const isTlsPairing = d.serviceType === "_adb-tls-pairing._tcp";
+                  const label = isTlsConnect ? "Ready" : isTlsPairing ? "Pairing needed" : "Legacy";
+                  return `<div class="discovered-device" data-host="${shellEscapeText(d.host)}" data-port="${d.port}" data-servicetype="${shellEscapeText(d.serviceType)}">
+                    <div class="discovered-device-info">
+                      <span class="discovered-device-addr">${shellEscapeText(d.host)}:${d.port}</span>
+                      <span class="discovered-device-type ${isTlsConnect ? "ready" : isTlsPairing ? "pairing" : "legacy"}">${label}</span>
+                    </div>
+                    <button class="empty-button" data-connect-mdns="${shellEscapeText(d.host)}:${d.port}">Connect</button>
+                  </div>`;
+              }).join("")}
+            </div>`
+            : state.scanningNetwork
+                ? `<div class="discovered-devices scanning">
+                    <p>Scanning network for ADB devices…</p>
+                  </div>`
+                : "";
         grid.innerHTML = `
       <section class="empty">
         <i data-lucide="monitor-smartphone"></i>
@@ -390,6 +411,7 @@ export function updateAppGrid(): void {
           <button class="empty-button" id="showGuide">How to connect?</button>
         </div>
       </section>
+      ${discoveredHtml}
     `;
         try {
             createIcons({ icons: { MonitorSmartphone } });
@@ -592,6 +614,21 @@ export function renderIcons() {
     }
 }
 
+export function updateDeviceDropdown(): void {
+    const container = document.getElementById("top-actions");
+    if (!container) return;
+    const existing = container.querySelector(".device-pill, .device-chip");
+    if (existing) {
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = renderDeviceSelect();
+        const replacement = wrapper.firstElementChild;
+        if (replacement) {
+            existing.replaceWith(replacement);
+            renderIcons();
+        }
+    }
+}
+
 export function updateTopBar(): void {
     const container = document.getElementById("top-actions");
     if (!container) return;
@@ -689,6 +726,9 @@ export function renderContextMenu(): void {
     if (folderId && !pkg) {
         menu.innerHTML = `
         <div class="menu-group">
+            <div class="menu-item" data-action="rename-folder" data-folder-id="${shellEscapeText(folderId)}" data-folder-name="${shellEscapeText(folderName ?? "")}">
+                <span>Rename</span>
+            </div>
             <div class="menu-item" data-action="delete-folder" data-folder-id="${shellEscapeText(folderId)}">
                 <span>Delete ${shellEscapeText(folderName ?? "folder")}</span>
             </div>
@@ -764,6 +804,26 @@ export function openRenameDeviceModal(stableId: string): void {
 export function closeRenameDeviceModal(): void {
     state.renameDeviceStableId = "";
     document.getElementById("rename-device-modal")?.classList.remove("open");
+}
+
+export function openRenameFolderModal(folderId: string, folderName: string): void {
+    state.renameFolderId = folderId;
+    state.renameFolderName = folderName;
+    const modal = document.getElementById("rename-folder-modal");
+    if (!modal) return;
+    modal.classList.add("open");
+    const input = document.getElementById("renameFolderName") as HTMLInputElement;
+    if (input) {
+        input.value = folderName;
+        input.focus();
+        input.select();
+    }
+}
+
+export function closeRenameFolderModal(): void {
+    state.renameFolderId = "";
+    state.renameFolderName = "";
+    document.getElementById("rename-folder-modal")?.classList.remove("open");
 }
 
 export function initShell(): void {
@@ -844,6 +904,24 @@ export function initShell(): void {
             <div class="create-folder-actions">
               <button class="empty-button" id="cancelRenameDevice">Cancel</button>
               <button class="empty-button primary" id="confirmRenameDevice">Rename</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="rename-folder-modal" class="folder-modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+          <div class="modal-head">
+            <h2>Rename folder</h2>
+            <button class="icon-button" id="closeRenameFolder" title="Cancel"><i data-lucide="x"></i></button>
+          </div>
+          <div class="create-folder-body">
+            <label class="create-folder-label">Folder name</label>
+            <input id="renameFolderName" class="create-folder-input" placeholder="Folder name" autocomplete="off" />
+            <div class="create-folder-actions">
+              <button class="empty-button" id="cancelRenameFolder">Cancel</button>
+              <button class="empty-button primary" id="confirmRenameFolder">Rename</button>
             </div>
           </div>
         </div>
