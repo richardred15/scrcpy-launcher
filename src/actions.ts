@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { state, stableIdForSerial } from "./state";
 import type { AndroidApp, Folder, SettingsState, LaunchResult, CachedAppMeta } from "./types";
 import { isFavorited } from "./utils";
@@ -17,6 +18,9 @@ import {
     closeCreateFolderModal,
     openCreateFolderModal,
     closeRenameDeviceModal,
+    openRenameDeviceModal,
+    openRenameFolderModal,
+    closeRenameFolderModal,
 } from "./render";
 
 export async function fetchNotificationCounts(): Promise<void> {
@@ -27,6 +31,7 @@ export async function fetchNotificationCounts(): Promise<void> {
             { serial: state.selectedSerial },
         );
         updateNotificationBadges();
+        updateTopBar();
     } catch {
         // best effort
     }
@@ -156,6 +161,61 @@ export async function confirmRenameFolder(): Promise<void> {
         updateFolderModal();
     } catch (e: unknown) {
         state.error = String(e);
+        updateErrorBanner();
+    }
+}
+
+export async function confirmSetScrcpyArgs(): Promise<void> {
+    const { scrcpyArgsId, scrcpyArgsType, scrcpyArgsValue } = state;
+    if (!scrcpyArgsId || !scrcpyArgsType) return;
+    const serial = state.selectedSerial;
+    if (!serial) {
+        state.error = "No device selected";
+        updateErrorBanner();
+        return;
+    }
+    try {
+        if (scrcpyArgsType === "device") {
+            await invoke("set_scrcpy_args", { serial, args: scrcpyArgsValue });
+        } else {
+            await invoke("set_app_scrcpy_args", { package_name: scrcpyArgsId, args: scrcpyArgsValue });
+        }
+        updateTopBar();
+        updateAppGrid();
+    } catch (e: unknown) {
+        state.error = String(e);
+        updateErrorBanner();
+    }
+}
+
+export async function confirmPairing(): Promise<void> {
+    const { pairingHostPort, pairingCode } = state;
+    if (!pairingHostPort || !pairingCode) return;
+    try {
+        const result = await invoke<string>("adb_pair", { host_port: pairingHostPort, pairing_code: pairingCode });
+        state.error = "";
+        updateErrorBanner();
+        alert(`Pairing successful:\n${result}`);
+    } catch (e: unknown) {
+        state.error = `Pairing failed: ${String(e)}`;
+        updateErrorBanner();
+    }
+}
+
+export async function doInstallApk(path: string): Promise<void> {
+    const serial = state.selectedSerial;
+    if (!serial) {
+        state.error = "No device selected for installation";
+        updateErrorBanner();
+        return;
+    }
+    try {
+        const result = await invoke<string>("adb_install", { serial, path });
+        state.error = "";
+        updateErrorBanner();
+        alert(`Installation successful:\n${result}`);
+    } catch (e: unknown) {
+        state.error = `Installation failed: ${String(e)}`;
         updateErrorBanner();
     }
 }
@@ -368,6 +428,10 @@ export async function saveSettings(): Promise<void> {
         displayBounds:
             document
                 .querySelector<HTMLInputElement>("#displayBounds")
+                ?.value.trim() || "",
+        globalScrcpyArgs:
+            document
+                .querySelector<HTMLInputElement>("#globalScrcpyArgs")
                 ?.value.trim() || "",
         deviceDisplayBounds,
     };

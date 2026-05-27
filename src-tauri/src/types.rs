@@ -40,6 +40,12 @@ pub struct Settings {
     pub device_nicknames: HashMap<String, String>,
     #[serde(default)]
     pub ignored_update_version: String,
+    #[serde(default)]
+    pub global_scrcpy_args: String,
+    #[serde(default)]
+    pub device_scrcpy_args: HashMap<String, String>,
+    #[serde(default)]
+    pub app_scrcpy_args: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

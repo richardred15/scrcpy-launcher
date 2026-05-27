@@ -54,7 +54,11 @@ pub fn run() {
     let app = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
+            commands::adb_install,
+            commands::adb_pair,
             commands::save_settings,
+            commands::set_scrcpy_args,
+            commands::set_app_scrcpy_args,
             commands::create_folder,
             commands::add_app_to_folder,
             commands::remove_app_from_folder,
@@ -78,6 +82,7 @@ pub fn run() {
             commands::set_device_nickname,
             commands::check_for_updates,
         ])
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |a| {
             cache::init(a.handle());
             let app_handle = a.handle().clone();

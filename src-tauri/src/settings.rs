@@ -24,6 +24,9 @@ pub fn default_settings() -> Settings {
         folders: HashMap::new(), // HashMap<serial, HashMap<folder_id, Folder>>
         device_nicknames: HashMap::new(),
         ignored_update_version: String::new(),
+        global_scrcpy_args: String::new(),
+        device_scrcpy_args: HashMap::new(),
+        app_scrcpy_args: HashMap::new(),
     }
 }
 

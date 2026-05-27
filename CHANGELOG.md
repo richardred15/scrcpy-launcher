@@ -8,6 +8,14 @@
 - "Scan for Devices" button discovers nearby Android devices with wireless debugging enabled
 - Discovered devices shown in empty state with type badges (Ready / Pairing Needed / Legacy)
 - `ADB_MDNS_OPENSCREEN=1` and `ADB_MDNS_AUTO_CONNECT=adb-tls-connect` env vars set on all ADB subprocesses
+- APK installation: added "Install APK" button with file picker and drag-and-drop support for .apk files
+- Folder renaming: added "Rename" option to folder context menu and a dedicated rename modal
+- Keyboard shortcuts: Ctrl+R (refresh), Ctrl+F (focus search), and Escape (close modals)
+- Per-device notification badge showing total notifications on the selected device pill
+- Custom scrcpy arguments: Global, per-device, and per-app overrides with merged launch logic
+- mDNS pairing flow: "Pair" button for pairing-needed devices and pairing code modal
+
+
 
 ### Changed
 - Replaced `adb mdns services` with direct mDNS discovery (Linux ADB server doesn't register the `host:mdns:*` services)

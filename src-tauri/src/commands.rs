@@ -172,6 +172,55 @@ pub fn delete_folder(
 // ── Settings commands ────────────────────────────────────────────────────────
 
 #[tauri::command]
+pub fn adb_install(app: tauri::AppHandle, serial: String, path: String) -> Result<String, String> {
+    let settings = read_settings(&app);
+    let output = crate::adb::no_window_command(&settings.adb_path)
+        .arg("-s")
+        .arg(&serial)
+        .arg("install")
+        .arg(path)
+        .output()
+        .map_err(|e| format!("Failed to execute adb install: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if output.status.success() {
+        Ok(stdout.to_string())
+    } else {
+        Err(if !stderr.is_empty() {
+            stderr.to_string()
+        } else {
+            stdout.to_string()
+        })
+    }
+}
+
+#[tauri::command]
+pub fn adb_pair(app: tauri::AppHandle, host_port: String, pairing_code: String) -> Result<String, String> {
+    let settings = read_settings(&app);
+    let output = crate::adb::no_window_command(&settings.adb_path)
+        .arg("pair")
+        .arg(host_port)
+        .arg(pairing_code)
+        .output()
+        .map_err(|e| format!("Failed to execute adb pair: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if output.status.success() {
+        Ok(stdout.to_string())
+    } else {
+        Err(if !stderr.is_empty() {
+            stderr.to_string()
+        } else {
+            stdout.to_string()
+        })
+    }
+}
+
+#[tauri::command]
 pub fn get_settings(app: tauri::AppHandle) -> Settings {
     read_settings(&app)
 }
@@ -183,6 +232,29 @@ pub fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<Settin
         .map_err(|err| format!("Unable to serialize settings: {err}"))?;
     fs::write(path, contents).map_err(|err| format!("Unable to save settings: {err}"))?;
     Ok(settings)
+}
+
+#[tauri::command]
+pub fn set_scrcpy_args(app: tauri::AppHandle, serial: String, args: String) -> Result<(), String> {
+    let settings = read_settings(&app);
+    let sid = stable_folder_id(&settings, &serial);
+    let mut new_settings = settings.clone();
+    new_settings.device_scrcpy_args.insert(sid, args);
+    let path = crate::settings::settings_path(&app)?;
+    let contents = serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
+    fs::write(path, contents).map_err(|e| format!("Write error: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_app_scrcpy_args(app: tauri::AppHandle, package_name: String, args: String) -> Result<(), String> {
+    let settings = read_settings(&app);
+    let mut new_settings = settings.clone();
+    new_settings.app_scrcpy_args.insert(package_name, args);
+    let path = crate::settings::settings_path(&app)?;
+    let contents = serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
+    fs::write(path, contents).map_err(|e| format!("Write error: {e}"))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -570,6 +642,17 @@ fn launch_mirror_inner(
         window_title,
     ];
 
+    // Merge scrcpy arguments: Global -> Device
+    for arg in settings.global_scrcpy_args.split_whitespace() {
+        args.push(arg.to_string());
+    }
+    let sid = stable_folder_id(settings, serial);
+    if let Some(device_args) = settings.device_scrcpy_args.get(&sid) {
+        for arg in device_args.split_whitespace() {
+            args.push(arg.to_string());
+        }
+    }
+
     if let Some(bounds) = display_bounds {
         if supports_bounds {
             args.push("--display-bounds".to_string());
@@ -679,7 +762,7 @@ pub fn launch_app(
     );
     let mut args = vec![
         "-s".to_string(),
-        serial,
+        serial.clone(),
         "--new-display".to_string(),
         "--start-app".to_string(),
         format!("+{package_name}"),
@@ -688,6 +771,22 @@ pub fn launch_app(
         "--display-ime-policy=local".to_string(),
         "--no-audio".to_string(),
     ];
+
+    // Merge scrcpy arguments: Global -> Device -> App
+    for arg in settings.global_scrcpy_args.split_whitespace() {
+        args.push(arg.to_string());
+    }
+    let sid = stable_folder_id(&settings, &serial);
+    if let Some(device_args) = settings.device_scrcpy_args.get(&sid) {
+        for arg in device_args.split_whitespace() {
+            args.push(arg.to_string());
+        }
+    }
+    if let Some(app_args) = settings.app_scrcpy_args.get(&package_name) {
+        for arg in app_args.split_whitespace() {
+            args.push(arg.to_string());
+        }
+    }
 
     if supports_flex {
         args.push("--flex-display".to_string());

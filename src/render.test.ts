@@ -247,6 +247,9 @@ describe("renderSettings", () => {
             folders: {},
             deviceNicknames: {},
             ignoredUpdateVersion: "",
+            globalScrcpyArgs: "",
+            deviceScrcpyArgs: {},
+            appScrcpyArgs: {},
         };
         state.devices = [{ serial: "abc", state: "device", wireless: false, stableId: "abc" }];
         const html = renderSettings();

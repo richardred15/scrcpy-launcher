@@ -28,6 +28,7 @@ image = { version = "0.25", default-features = false, features = ["png", "webp"]
 zip = { version = "2", default-features = false, features = ["deflate"] }
 apk-info-axml = "1.0.11"
 mdns-sd = "0.18"
+tauri-plugin-dialog = "2.7.1"
 
 [profile.release]
 strip = true

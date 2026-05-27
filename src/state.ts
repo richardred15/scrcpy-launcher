@@ -39,6 +39,11 @@ export type AppState = {
     renameDeviceStableId: string;
     renameFolderId: string;
     renameFolderName: string;
+    scrcpyArgsId: string;
+    scrcpyArgsType: "device" | "app" | null;
+    scrcpyArgsValue: string;
+    pairingHostPort: string;
+    pairingCode: string;
     guideAutoShown: boolean;
     discoveredDevices: MdnsDiscoveredDevice[];
     scanningNetwork: boolean;
@@ -79,6 +84,11 @@ export function createState(): AppState {
         renameDeviceStableId: "",
         renameFolderId: "",
         renameFolderName: "",
+        scrcpyArgsId: "",
+        scrcpyArgsType: null,
+        scrcpyArgsValue: "",
+        pairingHostPort: "",
+        pairingCode: "",
         guideAutoShown: false,
         discoveredDevices: [],
         scanningNetwork: false,

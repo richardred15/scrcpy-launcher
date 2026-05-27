@@ -2,6 +2,7 @@ import { version } from "../package.json";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { state, stableIdForSerial } from "./state";
 import type {
     ToolStatus,
@@ -35,6 +36,10 @@ import {
     closeRenameDeviceModal,
     openRenameFolderModal,
     closeRenameFolderModal,
+    openScrcpyArgsModal,
+    closeScrcpyArgsModal,
+    openPairingModal,
+    closePairingModal,
     showConnectionGuide,
 } from "./render";
 import {
@@ -42,6 +47,7 @@ import {
     doWirelessDisconnect,
     doWirelessReconnect,
     refreshAll,
+    doInstallApk,
     saveSettings,
     restartAdb,
     launchMirror,
@@ -56,6 +62,8 @@ import {
     deleteFolder,
     confirmRenameDevice,
     confirmRenameFolder,
+    confirmSetScrcpyArgs,
+    confirmPairing,
     closeSettings,
     loadSettings,
     loadWirelessDevices,
@@ -66,6 +74,24 @@ import {
 
 export function setupEventDelegation(): void {
     const app = document.querySelector<HTMLDivElement>("#app")!;
+
+    app.addEventListener("dragover", (event) => {
+        event.preventDefault();
+    });
+
+    getCurrentWindow().listen("tauri://drag-drop", (event) => {
+        const paths = (event.payload as string[]);
+        if (!paths || paths.length === 0) return;
+
+        const path = paths[0];
+        if (!path.toLowerCase().endsWith(".apk")) {
+            state.error = "Only .apk files are supported";
+            updateErrorBanner();
+            return;
+        }
+
+        void doInstallApk(path);
+    });
 
     app.addEventListener("contextmenu", (event) => {
         const target = event.target as HTMLElement;
@@ -119,7 +145,7 @@ export function setupEventDelegation(): void {
         }
     });
 
-    app.addEventListener("click", (event) => {
+    app.addEventListener("click", async (event) => {
         // Context menu item click — handle BEFORE outside-dismiss
         if (state.contextMenu) {
             const item = (event.target as HTMLElement).closest(".menu-item");
@@ -144,6 +170,14 @@ export function setupEventDelegation(): void {
                     const folderId = item.getAttribute("data-folder-id")!;
                     const folderName = item.getAttribute("data-folder-name") ?? "";
                     openRenameFolderModal(folderId, folderName);
+                } else if (action === "set-device-args") {
+                    const stableId = item.getAttribute("data-stable-id")!;
+                    const currentArgs = state.settings?.deviceScrcpyArgs[stableId] ?? "";
+                    openScrcpyArgsModal(stableId, "device", currentArgs);
+                } else if (action === "set-app-args") {
+                    const pkg = item.getAttribute("data-pkg")!;
+                    const currentArgs = state.settings?.appScrcpyArgs[pkg] ?? "";
+                    openScrcpyArgsModal(pkg, "app", currentArgs);
                 }
                 state.contextMenu = null;
                 renderContextMenu();
@@ -210,6 +244,30 @@ export function setupEventDelegation(): void {
             }
             if (t.closest("#confirmRenameFolder")) {
                 void confirmRenameFolder();
+                return;
+            }
+        }
+
+        if (state.scrcpyArgsId) {
+            const t = event.target as HTMLElement;
+            if (t.closest("#closeScrcpyArgs") || t.closest("#cancelScrcpyArgs") || t.classList.contains("modal-overlay")) {
+                closeScrcpyArgsModal();
+                return;
+            }
+            if (t.closest("#confirmScrcpyArgs")) {
+                void confirmSetScrcpyArgs();
+                return;
+            }
+        }
+
+        if (state.pairingHostPort) {
+            const t = event.target as HTMLElement;
+            if (t.closest("#closePairing") || t.closest("#cancelPairing") || t.classList.contains("modal-overlay")) {
+                closePairingModal();
+                return;
+            }
+            if (t.closest("#confirmPairing")) {
+                void confirmPairing();
                 return;
             }
         }
@@ -317,6 +375,13 @@ export function setupEventDelegation(): void {
             return;
         }
 
+        const pairMdns = target.closest("[data-pair-mdns]");
+        if (pairMdns) {
+            const hostPort = (pairMdns as HTMLElement).getAttribute("data-pair-mdns")!;
+            openPairingModal(hostPort);
+            return;
+        }
+
         const disconnectWirelessBtn = target.closest("[data-disconnect-wireless]");
         if (disconnectWirelessBtn) {
             const addr = (disconnectWirelessBtn as HTMLElement).dataset.disconnectWireless!;
@@ -411,6 +476,17 @@ export function setupEventDelegation(): void {
             return;
         }
 
+        if (target.closest("#installApk")) {
+            const file = await open({
+                multiple: false,
+                filters: [{ name: "APK", extensions: ["apk"] }],
+            });
+            if (file && typeof file === "string") {
+                void doInstallApk(file);
+            }
+            return;
+        }
+
         if (target.closest("#clearSearch")) {
             state.query = "";
             const searchInput = document.getElementById("search") as HTMLInputElement | null;
@@ -456,6 +532,13 @@ export function setupEventDelegation(): void {
             void doWirelessConnect();
         } else if (
             key === "Enter" &&
+            state.pairingHostPort &&
+            isInput &&
+            (activeEl as HTMLInputElement).id === "pairingCode"
+        ) {
+            void confirmPairing();
+        } else if (
+            key === "Enter" &&
             !isInput &&
             state.focusedAppIndex !== null
         ) {
@@ -479,6 +562,8 @@ export function setupEventDelegation(): void {
                 closeCreateFolderModal();
             } else if (state.renameFolderId) {
                 closeRenameFolderModal();
+            } else if (state.scrcpyArgsId) {
+                closeScrcpyArgsModal();
             } else if (state.renameDeviceStableId) {
                 closeRenameDeviceModal();
             } else {
@@ -526,6 +611,15 @@ export function setupEventDelegation(): void {
             (activeEl as HTMLInputElement).id === "renameDeviceName"
         ) {
             void confirmRenameDevice();
+        }
+
+        if (
+            key === "Enter" &&
+            state.renameFolderId &&
+            isInput &&
+            (activeEl as HTMLInputElement).id === "renameFolderName"
+        ) {
+            void confirmRenameFolder();
         }
 
         if (key === "Backspace" && state.query !== "") {

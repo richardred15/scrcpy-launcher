@@ -59,6 +59,10 @@ button {
 
 .shell {
   min-height: 100vh;
+  padding: 0;
+}
+
+.shell-content {
   padding: 0 14px 14px;
 }
 
@@ -67,10 +71,14 @@ button {
   align-items: center;
   justify-content: space-between;
   height: 28px;
-  padding: 0 6px 0 12px;
+  padding: 0 6px 0 8px;
   user-select: none;
   -webkit-user-select: none;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 110;
+  background: #101113;
 }
 
 .brand {
@@ -83,8 +91,8 @@ button {
 
 .brand-mark {
   display: grid;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   place-items: center;
   border-radius: 4px;
   overflow: hidden;
@@ -92,8 +100,8 @@ button {
 }
 
 .brand-icon {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   display: block;
 }
 
@@ -321,6 +329,20 @@ button {
   opacity: 0.7;
 }
 
+.device-notif-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: #ff4444;
+  padding: 0 4px;
+  border-radius: 4px;
+  min-width: 16px;
+  height: 14px;
+}
+
 .field select,
 .field input,
 .search-box input {
@@ -363,7 +385,7 @@ svg {
   gap: 10px;
   margin-bottom: 12px;
   position: sticky;
-  top: 0;
+  top: 28px;
   z-index: 100;
   padding: 6px 0;
   transition: background 150ms ease;

@@ -29,6 +29,7 @@ import {
     Wifi,
     X,
     Download,
+    Upload,
 } from "lucide";
 
 export function renderStatusPill(binary: BinaryStatus, label: string): string {
@@ -69,6 +70,12 @@ export function renderDeviceSelect(): string {
     const tempHtml = selected.batteryTemperature !== undefined
         ? `<span class="device-badge">${selected.batteryTemperature.toFixed(1)}°C</span>`
         : "";
+
+    const totalNotifications = Object.values(state.notificationCounts).reduce((a, b) => a + b, 0);
+    const notifHtml = totalNotifications > 0
+        ? `<span class="device-notif-badge" title="Notifications">${totalNotifications}</span>`
+        : "";
+
     const isSelected = state.devices.some(d => d.serial === state.selectedSerial);
     const cls = isSelected ? "device-pill selected" : "device-pill";
 
@@ -97,6 +104,7 @@ export function renderDeviceSelect(): string {
       ${dropdownHtml}
       ${batteryHtml}
       ${tempHtml}
+      ${notifHtml}
       <button class="icon-button tiny" data-mirror="${shellEscapeText(selected.serial)}" title="Mirror"><i data-lucide="monitor-smartphone"></i></button>
     </div>`;
 }
@@ -387,13 +395,16 @@ export function updateAppGrid(): void {
                   const isTlsConnect = d.serviceType === "_adb-tls-connect._tcp";
                   const isTlsPairing = d.serviceType === "_adb-tls-pairing._tcp";
                   const label = isTlsConnect ? "Ready" : isTlsPairing ? "Pairing needed" : "Legacy";
-                  return `<div class="discovered-device" data-host="${shellEscapeText(d.host)}" data-port="${d.port}" data-servicetype="${shellEscapeText(d.serviceType)}">
-                    <div class="discovered-device-info">
-                      <span class="discovered-device-addr">${shellEscapeText(d.host)}:${d.port}</span>
-                      <span class="discovered-device-type ${isTlsConnect ? "ready" : isTlsPairing ? "pairing" : "legacy"}">${label}</span>
-                    </div>
-                    <button class="empty-button" data-connect-mdns="${shellEscapeText(d.host)}:${d.port}">Connect</button>
-                  </div>`;
+                   return `<div class="discovered-device" data-host="${shellEscapeText(d.host)}" data-port="${d.port}" data-servicetype="${shellEscapeText(d.serviceType)}">
+                     <div class="discovered-device-info">
+                       <span class="discovered-device-addr">${shellEscapeText(d.host)}:${d.port}</span>
+                       <span class="discovered-device-type ${isTlsConnect ? "ready" : isTlsPairing ? "pairing" : "legacy"}">${label}</span>
+                     </div>
+                     <div class="discovered-device-actions">
+                       ${isTlsPairing ? `<button class="empty-button" data-pair-mdns="${shellEscapeText(d.host)}:${d.port}">Pair</button>` : ''}
+                       <button class="empty-button" data-connect-mdns="${shellEscapeText(d.host)}:${d.port}">Connect</button>
+                     </div>
+                   </div>`;
               }).join("")}
             </div>`
             : state.scanningNetwork
@@ -511,6 +522,11 @@ export function renderSettings(): string {
           <span>scrcpy path</span>
           <input id="scrcpyPath" value="${shellEscapeText(state.settings.scrcpyPath)}" placeholder="scrcpy" />
         </label>
+        <label class="field">
+          <span>Global scrcpy args</span>
+          <input id="globalScrcpyArgs" value="${shellEscapeText(state.settings.globalScrcpyArgs)}" placeholder="e.g. --max-size 1024 --bit-rate 4M" />
+          <small class="field-hint">Applied to all launches. Overridden by device/app args.</small>
+        </label>
 
         <label class="check-row">
           <input id="includeSystemApps" type="checkbox" ${state.settings.includeSystemApps ? "checked" : ""} />
@@ -606,7 +622,7 @@ export function renderIcons() {
             icons: {
                 Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium,
                 ChevronDown, Download, MonitorSmartphone, Play, RefreshCw, Search,
-                Server, Settings, Smartphone, Trash2, Usb, Wifi, X,
+                Server, Settings, Smartphone, Trash2, Usb, Wifi, X, Upload,
             },
         });
     } catch (error) {
@@ -637,6 +653,7 @@ export function updateTopBar(): void {
         ${renderDeviceSelect()}
         <button class="icon-button" id="adbRestart" title="Restart ADB server"><i data-lucide="server"></i></button>
         <button class="icon-button" id="wirelessConnect" title="Connect wireless ADB device"><i data-lucide="wifi"></i></button>
+        <button class="icon-button" id="installApk" title="Install APK"><i data-lucide="upload"></i></button>
         <button class="icon-button" id="reload" title="Rescan apps and devices"><i data-lucide="refresh-cw"></i></button>
         <button class="icon-button" id="settings" title="Settings"><i data-lucide="settings"></i></button>
     `;
@@ -718,6 +735,9 @@ export function renderContextMenu(): void {
             <div class="menu-item" data-action="rename-device" data-stable-id="${shellEscapeText(deviceStableId)}">
                 <span>Rename device</span>
             </div>
+            <div class="menu-item" data-action="set-device-args" data-stable-id="${shellEscapeText(deviceStableId)}">
+                <span>Scrcpy args</span>
+            </div>
         </div>`;
         return;
     }
@@ -763,6 +783,9 @@ export function renderContextMenu(): void {
     }
     parts.push(`</div>`);
     parts.push(`<div class="menu-group">`);
+    parts.push(`<div class="menu-item" data-action="set-app-args" data-pkg="${shellEscapeText(pkg)}">`);
+    parts.push(`<span>Scrcpy args</span>`);
+    parts.push(`</div>`);
     parts.push(`<div class="menu-item" data-action="create-folder" data-pkg="${shellEscapeText(pkg)}">`);
     parts.push(`<span>Create New Folder</span>`);
     parts.push(`</div>`);
@@ -824,6 +847,47 @@ export function closeRenameFolderModal(): void {
     state.renameFolderId = "";
     state.renameFolderName = "";
     document.getElementById("rename-folder-modal")?.classList.remove("open");
+}
+
+export function openScrcpyArgsModal(id: string, type: "device" | "app", currentArgs: string): void {
+    state.scrcpyArgsId = id;
+    state.scrcpyArgsType = type;
+    state.scrcpyArgsValue = currentArgs;
+    const modal = document.getElementById("scrcpy-args-modal");
+    if (!modal) return;
+    modal.classList.add("open");
+    const input = document.getElementById("scrcpyArgsInput") as HTMLInputElement;
+    if (input) {
+        input.value = currentArgs;
+        input.focus();
+        input.select();
+    }
+}
+
+export function closeScrcpyArgsModal(): void {
+    state.scrcpyArgsId = "";
+    state.scrcpyArgsType = null;
+    state.scrcpyArgsValue = "";
+    document.getElementById("scrcpy-args-modal")?.classList.remove("open");
+}
+
+export function openPairingModal(hostPort: string): void {
+    state.pairingHostPort = hostPort;
+    state.pairingCode = "";
+    const modal = document.getElementById("pairing-modal");
+    if (!modal) return;
+    modal.classList.add("open");
+    const input = document.getElementById("pairingCode") as HTMLInputElement;
+    if (input) {
+        input.value = "";
+        input.focus();
+    }
+}
+
+export function closePairingModal(): void {
+    state.pairingHostPort = "";
+    state.pairingCode = "";
+    document.getElementById("pairing-modal")?.classList.remove("open");
 }
 
 export function initShell(): void {
@@ -922,6 +986,42 @@ export function initShell(): void {
             <div class="create-folder-actions">
               <button class="empty-button" id="cancelRenameFolder">Cancel</button>
               <button class="empty-button primary" id="confirmRenameFolder">Rename</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="scrcpy-args-modal" class="folder-modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+          <div class="modal-head">
+            <h2>Scrcpy arguments</h2>
+            <button class="icon-button" id="closeScrcpyArgs" title="Cancel"><i data-lucide="x"></i></button>
+          </div>
+          <div class="create-folder-body">
+            <label class="create-folder-label">Arguments</label>
+            <input id="scrcpyArgsInput" class="create-folder-input" placeholder="e.g. --max-size 1024 --bit-rate 4M" autocomplete="off" />
+            <div class="create-folder-actions">
+              <button class="empty-button" id="cancelScrcpyArgs">Cancel</button>
+              <button class="empty-button primary" id="confirmScrcpyArgs">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pairing-modal" class="folder-modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+          <div class="modal-head">
+            <h2>ADB Pairing</h2>
+            <button class="icon-button" id="closePairing" title="Cancel"><i data-lucide="x"></i></button>
+          </div>
+          <div class="create-folder-body">
+            <label class="create-folder-label">Pairing code</label>
+            <input id="pairingCode" class="create-folder-input" placeholder="Enter 6-digit code" autocomplete="off" />
+            <div class="create-folder-actions">
+              <button class="empty-button" id="cancelPairing">Cancel</button>
+              <button class="empty-button primary" id="confirmPairing">Pair</button>
             </div>
           </div>
         </div>

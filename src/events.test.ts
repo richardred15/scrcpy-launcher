@@ -9,6 +9,12 @@ vi.mock("@tauri-apps/api/event", () => ({
     listen: vi.fn(() => Promise.resolve(() => {})),
 }));
 
+vi.mock("@tauri-apps/api/window", () => ({
+    getCurrentWindow: vi.fn(() => ({
+        listen: vi.fn(() => Promise.resolve(() => {})),
+    })),
+}));
+
 vi.mock("lucide", () => ({
     createIcons: vi.fn(),
     Battery: "i",

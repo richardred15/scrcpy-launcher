@@ -21,6 +21,9 @@ export type SettingsState = {
     folders: Record<string, Record<string, Folder>>;
     deviceNicknames: Record<string, string>;
     ignoredUpdateVersion: string;
+    globalScrcpyArgs: string;
+    deviceScrcpyArgs: Record<string, string>;
+    appScrcpyArgs: Record<string, string>;
 };
 
 export type BinaryStatus = {

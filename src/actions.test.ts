@@ -183,6 +183,9 @@ describe("doWirelessConnect", () => {
             folders: {},
             deviceNicknames: {},
             ignoredUpdateVersion: "",
+            globalScrcpyArgs: "",
+            deviceScrcpyArgs: {},
+            appScrcpyArgs: {},
         };
         vi.mocked(invoke).mockResolvedValue("connected to 192.168.1.100:5555");
         await doWirelessConnect();
@@ -319,6 +322,9 @@ describe("loadSettings", () => {
             folders: { "abc": { games: { id: "games", name: "Games", apps: ["com.a"] } } },
             deviceNicknames: {},
             ignoredUpdateVersion: "",
+            globalScrcpyArgs: "",
+            deviceScrcpyArgs: {},
+            appScrcpyArgs: {},
         };
         vi.mocked(invoke).mockResolvedValue(settings);
         await loadSettings();
@@ -355,6 +361,9 @@ describe("saveSettings", () => {
             folders: {},
             deviceNicknames: {},
             ignoredUpdateVersion: "",
+            globalScrcpyArgs: "",
+            deviceScrcpyArgs: {},
+            appScrcpyArgs: {},
         };
         vi.mocked(invoke).mockImplementation(async (_cmd: string, args?: any) => ({ ...args?.settings }));
         await saveSettings();
