@@ -501,12 +501,8 @@ export function updateControlRow(): void {
 
 export function updateStickyState(): void {
     const row = document.querySelector<HTMLElement>(".control-row");
-    const topbar = document.querySelector<HTMLElement>(".titlebar");
-    if (row && topbar) {
-        row.classList.toggle(
-            "stuck",
-            topbar.getBoundingClientRect().bottom <= 0,
-        );
+    if (row) {
+        row.classList.toggle("stuck", window.scrollY > 0);
     }
 }
 

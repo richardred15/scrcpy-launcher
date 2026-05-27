@@ -79,6 +79,7 @@ button {
   top: 0;
   z-index: 110;
   background: #101113;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .brand {
@@ -387,17 +388,19 @@ svg {
   position: sticky;
   top: 28px;
   z-index: 100;
-  padding: 6px 0;
+  padding: 6px 14px;
+  background: rgba(16, 17, 19, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   transition: background 150ms ease;
 }
 
 .control-row.stuck {
-  background: rgba(16, 17, 19, 0.75);
-  backdrop-filter: blur(8px);
+  background: rgba(16, 17, 19, 0.96);
 }
 
 .control-row.stuck:focus-within {
-  background: #101113;
+  background: rgba(16, 17, 19, 0.99);
 }
 
 .search-box {
@@ -424,6 +427,11 @@ svg {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 12px;
+  padding: 0 14px 14px;
+}
+
+#error-container {
+  padding: 0 14px;
 }
 
 .app-card {
@@ -604,6 +612,7 @@ svg {
 }
 
 .discovered-devices {
+  grid-column: 1 / -1;
   margin: 20px auto 0;
   max-width: 400px;
   width: 100%;
@@ -857,7 +866,6 @@ code {
     min-width: 360px;
   }
 
-  .topbar,
   .control-row {
     align-items: stretch;
     flex-direction: column;
