@@ -23,7 +23,12 @@ fn run_mdns_scan(settings: &Settings, devices: &[Device], app_handle: &tauri::Ap
                 .iter()
                 .any(|s| s.contains(&host_port) || s.contains(&svc.host))
             {
-                let _ = adb::adb_timeout(settings, None, &["connect", &host_port], Duration::from_secs(5));
+                let _ = adb::adb_timeout(
+                    settings,
+                    None,
+                    &["connect", &host_port],
+                    Duration::from_secs(5),
+                );
             }
         }
     }
@@ -155,9 +160,15 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
             continue;
         }
         let t = Duration::from_secs(5);
-        let model = adb::adb_shell_timeout(settings, &serial, &["getprop", "ro.product.model"], t).ok();
-        let android_version =
-            adb::adb_shell_timeout(settings, &serial, &["getprop", "ro.build.version.release"], t).ok();
+        let model =
+            adb::adb_shell_timeout(settings, &serial, &["getprop", "ro.product.model"], t).ok();
+        let android_version = adb::adb_shell_timeout(
+            settings,
+            &serial,
+            &["getprop", "ro.build.version.release"],
+            t,
+        )
+        .ok();
         let battery = adb::adb_shell_timeout(settings, &serial, &["dumpsys", "battery"], t).ok();
         let (battery_level, battery_temperature, battery_charging) = battery
             .as_deref()

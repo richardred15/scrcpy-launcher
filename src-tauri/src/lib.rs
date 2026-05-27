@@ -91,7 +91,8 @@ pub fn run() {
             let scan_flag = Arc::new(AtomicBool::new(false));
             a.manage(RefreshFlag(flag.clone()));
             a.manage(ScanFlag(scan_flag.clone()));
-            let h = std::thread::spawn(move || worker_loop(app_handle, flag, scan_flag, worker_exit));
+            let h =
+                std::thread::spawn(move || worker_loop(app_handle, flag, scan_flag, worker_exit));
             *setup_handle.lock().unwrap() = Some(h);
             Ok(())
         })

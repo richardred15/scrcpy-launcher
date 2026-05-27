@@ -210,13 +210,20 @@ pub fn adb_install(app: tauri::AppHandle, serial: String, path: String) -> Resul
             Ok(out) => (true, out),
             Err(e) => (false, e),
         };
-        let _ = app.emit("apk-install-result", serde_json::json!({ "success": success, "message": message }));
+        let _ = app.emit(
+            "apk-install-result",
+            serde_json::json!({ "success": success, "message": message }),
+        );
     });
     Ok(())
 }
 
 #[tauri::command]
-pub fn adb_pair(app: tauri::AppHandle, host_port: String, pairing_code: String) -> Result<String, String> {
+pub fn adb_pair(
+    app: tauri::AppHandle,
+    host_port: String,
+    pairing_code: String,
+) -> Result<String, String> {
     let settings = read_settings(&app);
     crate::adb::run_command_timeout(
         &settings.adb_path,
@@ -246,18 +253,24 @@ pub fn set_scrcpy_args(app: tauri::AppHandle, serial: String, args: String) -> R
     let mut new_settings = settings.clone();
     new_settings.device_scrcpy_args.insert(sid, args);
     let path = crate::settings::settings_path(&app)?;
-    let contents = serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
+    let contents =
+        serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
     fs::write(path, contents).map_err(|e| format!("Write error: {e}"))?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn set_app_scrcpy_args(app: tauri::AppHandle, package_name: String, args: String) -> Result<(), String> {
+pub fn set_app_scrcpy_args(
+    app: tauri::AppHandle,
+    package_name: String,
+    args: String,
+) -> Result<(), String> {
     let settings = read_settings(&app);
     let mut new_settings = settings.clone();
     new_settings.app_scrcpy_args.insert(package_name, args);
     let path = crate::settings::settings_path(&app)?;
-    let contents = serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
+    let contents =
+        serde_json::to_string_pretty(&new_settings).map_err(|e| format!("Serialize error: {e}"))?;
     fs::write(path, contents).map_err(|e| format!("Write error: {e}"))?;
     Ok(())
 }
@@ -698,7 +711,6 @@ pub fn launch_mirror(app: tauri::AppHandle, serial: String) -> Result<LaunchResu
     let settings = read_settings(&app);
     launch_mirror_inner(&app, &settings, &serial)
 }
-
 
 #[tauri::command]
 pub fn launch_app(
