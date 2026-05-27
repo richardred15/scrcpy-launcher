@@ -199,8 +199,8 @@ export function setupEventDelegation(): void {
             return;
         }
 
-        if ((event.target as HTMLElement).closest("#closeFolderModal") || 
-            (event.target as HTMLElement).classList.contains("modal-overlay")) {
+        if ((event.target as HTMLElement).closest("#closeFolderModal") ||
+            ((event.target as HTMLElement).classList.contains("modal-overlay") && (event.target as HTMLElement).closest("#folder-modal"))) {
             openFolder(null);
             return;
         }
@@ -514,6 +514,12 @@ export function setupEventDelegation(): void {
             state.wirelessConnectResult = null;
             state.wirelessConnectMsg = "";
         }
+        if (input.id === "pairingCode") {
+            state.pairingCode = input.value;
+        }
+        if (input.id === "scrcpyArgsInput") {
+            state.scrcpyArgsValue = input.value;
+        }
     });
 
     window.addEventListener("keydown", (event) => {
@@ -547,26 +553,28 @@ export function setupEventDelegation(): void {
             if (item) void launch(item);
         }
 
-        if ((key === "Escape") && !isInput) {
-            if (state.settingsOpen) {
-                closeSettings();
-            } else if (state.wirelessConnectOpen) {
-                state.wirelessConnectOpen = false;
-                updateWirelessForm();
+        if (key === "Escape") {
+            if (state.pairingHostPort) {
+                closePairingModal();
+            } else if (state.scrcpyArgsId) {
+                closeScrcpyArgsModal();
+            } else if (state.renameFolderId) {
+                closeRenameFolderModal();
+            } else if (state.renameDeviceStableId) {
+                closeRenameDeviceModal();
+            } else if (state.createFolderPkg) {
+                closeCreateFolderModal();
+            } else if (state.currentFolderId) {
+                openFolder(null);
             } else if (state.contextMenu) {
                 state.contextMenu = null;
                 renderContextMenu();
-            } else if (state.currentFolderId) {
-                openFolder(null);
-            } else if (state.createFolderPkg) {
-                closeCreateFolderModal();
-            } else if (state.renameFolderId) {
-                closeRenameFolderModal();
-            } else if (state.scrcpyArgsId) {
-                closeScrcpyArgsModal();
-            } else if (state.renameDeviceStableId) {
-                closeRenameDeviceModal();
-            } else {
+            } else if (state.wirelessConnectOpen) {
+                state.wirelessConnectOpen = false;
+                updateWirelessForm();
+            } else if (state.settingsOpen) {
+                closeSettings();
+            } else if (!isInput) {
                 const guide = document.getElementById("guide-modal");
                 if (guide?.classList.contains("open")) {
                     guide.classList.remove("open");

@@ -16,6 +16,32 @@ use crate::settings::read_settings;
 use crate::types::{AppMetaResolvedEvent, CachedAppMeta, Folder, LaunchResult, Settings};
 use crate::web::{download_icon_as_data_url, rate_limit, scrape_fdroid, scrape_google_play};
 
+/// Split a shell-like argument string respecting single and double quotes.
+/// e.g. `--window-title "My Device"` → `["--window-title", "My Device"]`
+fn split_args(s: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    for ch in s.chars() {
+        match ch {
+            '\'' if !in_double => in_single = !in_single,
+            '"' if !in_single => in_double = !in_double,
+            ' ' | '\t' if !in_single && !in_double => {
+                if !current.is_empty() {
+                    args.push(current.clone());
+                    current.clear();
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.is_empty() {
+        args.push(current);
+    }
+    args
+}
+
 fn stable_folder_id(settings: &Settings, serial: &str) -> String {
     adb_shell(settings, serial, &["getprop", "ro.serialno"])
         .ok()
@@ -447,12 +473,17 @@ pub fn resolve_app_batch(
 pub fn get_notification_counts(app: tauri::AppHandle, serial: String) -> HashMap<String, u32> {
     let settings = read_settings(&app);
     let mut counts = HashMap::new();
-    if let Ok(output) = adb_shell(&settings, &serial, &["dumpsys", "notification"]) {
+    // `dumpsys notification --noredact` lists one `NotificationRecord` per notification.
+    // Each record starts with a line like "  NotificationRecord(... pkg=com.example ...)".
+    // Counting only those header lines gives one count per real notification.
+    if let Ok(output) = adb_shell(&settings, &serial, &["dumpsys", "notification", "--noredact"]) {
         for line in output.lines() {
-            if let Some(rest) = line.split("pkg=").nth(1) {
-                let pkg = rest.split_whitespace().next().unwrap_or("").to_string();
-                if !pkg.is_empty() {
-                    *counts.entry(pkg).or_insert(0) += 1;
+            if line.trim_start().starts_with("NotificationRecord(") {
+                if let Some(rest) = line.split("pkg=").nth(1) {
+                    let pkg = rest.split_whitespace().next().unwrap_or("").to_string();
+                    if !pkg.is_empty() {
+                        *counts.entry(pkg).or_insert(0) += 1;
+                    }
                 }
             }
         }
@@ -643,14 +674,10 @@ fn launch_mirror_inner(
     ];
 
     // Merge scrcpy arguments: Global -> Device
-    for arg in settings.global_scrcpy_args.split_whitespace() {
-        args.push(arg.to_string());
-    }
+    args.extend(split_args(&settings.global_scrcpy_args));
     let sid = stable_folder_id(settings, serial);
     if let Some(device_args) = settings.device_scrcpy_args.get(&sid) {
-        for arg in device_args.split_whitespace() {
-            args.push(arg.to_string());
-        }
+        args.extend(split_args(device_args));
     }
 
     if let Some(bounds) = display_bounds {
@@ -773,19 +800,13 @@ pub fn launch_app(
     ];
 
     // Merge scrcpy arguments: Global -> Device -> App
-    for arg in settings.global_scrcpy_args.split_whitespace() {
-        args.push(arg.to_string());
-    }
+    args.extend(split_args(&settings.global_scrcpy_args));
     let sid = stable_folder_id(&settings, &serial);
     if let Some(device_args) = settings.device_scrcpy_args.get(&sid) {
-        for arg in device_args.split_whitespace() {
-            args.push(arg.to_string());
-        }
+        args.extend(split_args(device_args));
     }
     if let Some(app_args) = settings.app_scrcpy_args.get(&package_name) {
-        for arg in app_args.split_whitespace() {
-            args.push(arg.to_string());
-        }
+        args.extend(split_args(app_args));
     }
 
     if supports_flex {

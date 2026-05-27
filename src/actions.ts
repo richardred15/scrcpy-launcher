@@ -21,6 +21,8 @@ import {
     openRenameDeviceModal,
     openRenameFolderModal,
     closeRenameFolderModal,
+    closeScrcpyArgsModal,
+    closePairingModal,
 } from "./render";
 
 export async function fetchNotificationCounts(): Promise<void> {
@@ -174,11 +176,18 @@ export async function confirmSetScrcpyArgs(): Promise<void> {
         updateErrorBanner();
         return;
     }
+    closeScrcpyArgsModal();
     try {
         if (scrcpyArgsType === "device") {
             await invoke("set_scrcpy_args", { serial, args: scrcpyArgsValue });
+            if (state.settings) {
+                state.settings.deviceScrcpyArgs[stableIdForSerial(serial)] = scrcpyArgsValue;
+            }
         } else {
             await invoke("set_app_scrcpy_args", { package_name: scrcpyArgsId, args: scrcpyArgsValue });
+            if (state.settings) {
+                state.settings.appScrcpyArgs[scrcpyArgsId] = scrcpyArgsValue;
+            }
         }
         updateTopBar();
         updateAppGrid();
@@ -191,11 +200,17 @@ export async function confirmSetScrcpyArgs(): Promise<void> {
 export async function confirmPairing(): Promise<void> {
     const { pairingHostPort, pairingCode } = state;
     if (!pairingHostPort || !pairingCode) return;
+    closePairingModal();
     try {
         const result = await invoke<string>("adb_pair", { host_port: pairingHostPort, pairing_code: pairingCode });
-        state.error = "";
-        updateErrorBanner();
-        alert(`Pairing successful:\n${result}`);
+        if (result.toLowerCase().includes("failed") || result.toLowerCase().includes("error")) {
+            state.error = `Pairing failed: ${result}`;
+            updateErrorBanner();
+        } else {
+            state.error = "";
+            updateErrorBanner();
+            alert(`Pairing successful:\n${result}`);
+        }
     } catch (e: unknown) {
         state.error = `Pairing failed: ${String(e)}`;
         updateErrorBanner();
@@ -272,9 +287,10 @@ export async function doWirelessConnect(): Promise<void> {
             result.includes("connected to")
         ) {
             await invoke("save_wireless_device", { hostPort });
-            state.settings!.lastWirelessHost = host;
-            state.settings!.lastWirelessPort = port;
-            await invoke("save_settings", { settings: state.settings });
+            const freshSettings = await invoke<SettingsState>("get_settings");
+            freshSettings.lastWirelessHost = host;
+            freshSettings.lastWirelessPort = port;
+            state.settings = await invoke<SettingsState>("save_settings", { settings: freshSettings });
             state.wirelessConnectOpen = false;
             state.wirelessConnectResult = null;
             state.wirelessConnectMsg = "";
