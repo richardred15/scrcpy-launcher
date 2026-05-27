@@ -1,5 +1,6 @@
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use crate::types::Settings;
 
@@ -31,6 +32,57 @@ pub fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
             stderr
         })
     }
+}
+
+/// Run a command with a hard timeout. Kills the child process if the deadline is exceeded.
+pub fn run_command_timeout(program: &str, args: &[&str], timeout: Duration) -> Result<String, String> {
+    let mut command = no_window_command(program);
+    command.args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::null());
+    let mut child = command.spawn().map_err(|e| format!("Failed to spawn {program}: {e}"))?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!("{program} timed out after {}s", timeout.as_secs()));
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                return Err(format!("Failed to wait for {program}: {e}"));
+            }
+        }
+    }
+    let output = child.wait_with_output().map_err(|e| format!("Failed to read output: {e}"))?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if stderr.is_empty() {
+            format!("{program} exited with status {}", output.status)
+        } else {
+            stderr
+        })
+    }
+}
+
+pub fn adb_timeout(settings: &Settings, serial: Option<&str>, args: &[&str], timeout: Duration) -> Result<String, String> {
+    let mut all_args = Vec::new();
+    if let Some(serial) = serial {
+        all_args.extend(["-s", serial]);
+    }
+    all_args.extend_from_slice(args);
+    run_command_timeout(&settings.adb_path, &all_args, timeout)
+}
+
+pub fn adb_shell_timeout(settings: &Settings, serial: &str, args: &[&str], timeout: Duration) -> Result<String, String> {
+    let mut all_args = vec!["shell"];
+    all_args.extend_from_slice(args);
+    adb_timeout(settings, Some(serial), &all_args, timeout)
 }
 
 pub fn adb(settings: &Settings, serial: Option<&str>, args: &[&str]) -> Result<String, String> {

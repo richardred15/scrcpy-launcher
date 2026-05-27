@@ -198,52 +198,31 @@ pub fn delete_folder(
 // ── Settings commands ────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn adb_install(app: tauri::AppHandle, serial: String, path: String) -> Result<String, String> {
-    let settings = read_settings(&app);
-    let output = crate::adb::no_window_command(&settings.adb_path)
-        .arg("-s")
-        .arg(&serial)
-        .arg("install")
-        .arg(path)
-        .output()
-        .map_err(|e| format!("Failed to execute adb install: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    if output.status.success() {
-        Ok(stdout.to_string())
-    } else {
-        Err(if !stderr.is_empty() {
-            stderr.to_string()
-        } else {
-            stdout.to_string()
-        })
-    }
+pub fn adb_install(app: tauri::AppHandle, serial: String, path: String) -> Result<(), String> {
+    std::thread::spawn(move || {
+        let settings = read_settings(&app);
+        let result = crate::adb::run_command_timeout(
+            &settings.adb_path,
+            &["-s", &serial, "install", &path],
+            Duration::from_secs(120),
+        );
+        let (success, message) = match result {
+            Ok(out) => (true, out),
+            Err(e) => (false, e),
+        };
+        let _ = app.emit("apk-install-result", serde_json::json!({ "success": success, "message": message }));
+    });
+    Ok(())
 }
 
 #[tauri::command]
 pub fn adb_pair(app: tauri::AppHandle, host_port: String, pairing_code: String) -> Result<String, String> {
     let settings = read_settings(&app);
-    let output = crate::adb::no_window_command(&settings.adb_path)
-        .arg("pair")
-        .arg(host_port)
-        .arg(pairing_code)
-        .output()
-        .map_err(|e| format!("Failed to execute adb pair: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    if output.status.success() {
-        Ok(stdout.to_string())
-    } else {
-        Err(if !stderr.is_empty() {
-            stderr.to_string()
-        } else {
-            stdout.to_string()
-        })
-    }
+    crate::adb::run_command_timeout(
+        &settings.adb_path,
+        &["pair", &host_port, &pairing_code],
+        Duration::from_secs(30),
+    )
 }
 
 #[tauri::command]
@@ -476,7 +455,12 @@ pub fn get_notification_counts(app: tauri::AppHandle, serial: String) -> HashMap
     // `dumpsys notification --noredact` lists one `NotificationRecord` per notification.
     // Each record starts with a line like "  NotificationRecord(... pkg=com.example ...)".
     // Counting only those header lines gives one count per real notification.
-    if let Ok(output) = adb_shell(&settings, &serial, &["dumpsys", "notification", "--noredact"]) {
+    if let Ok(output) = crate::adb::adb_shell_timeout(
+        &settings,
+        &serial,
+        &["dumpsys", "notification", "--noredact"],
+        Duration::from_secs(8),
+    ) {
         for line in output.lines() {
             if line.trim_start().starts_with("NotificationRecord(") {
                 if let Some(rest) = line.split("pkg=").nth(1) {

@@ -18,7 +18,7 @@ use tauri::Manager;
 
 use platform::{cleanup_stale_app_data, register_desktop_file, TerminalGuard};
 use runtime::kill_children;
-use worker::{worker_loop, RefreshFlag};
+use worker::{worker_loop, RefreshFlag, ScanFlag};
 
 pub fn run() {
     register_desktop_file();
@@ -77,6 +77,7 @@ pub fn run() {
             commands::get_notification_counts,
             worker::get_open_apps,
             worker::trigger_refresh,
+            worker::trigger_scan,
             worker::trigger_load_apps,
             commands::install_scrcpy_windows,
             commands::set_device_nickname,
@@ -87,8 +88,10 @@ pub fn run() {
             cache::init(a.handle());
             let app_handle = a.handle().clone();
             let flag = Arc::new(AtomicBool::new(false));
+            let scan_flag = Arc::new(AtomicBool::new(false));
             a.manage(RefreshFlag(flag.clone()));
-            let h = std::thread::spawn(move || worker_loop(app_handle, flag, worker_exit));
+            a.manage(ScanFlag(scan_flag.clone()));
+            let h = std::thread::spawn(move || worker_loop(app_handle, flag, scan_flag, worker_exit));
             *setup_handle.lock().unwrap() = Some(h);
             Ok(())
         })

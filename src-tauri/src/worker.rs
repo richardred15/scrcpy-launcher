@@ -11,6 +11,7 @@ use crate::settings::read_settings;
 use crate::types::{AndroidApp, AppsLoadedEvent, BinaryStatus, Device, Settings, ToolStatus};
 
 pub struct RefreshFlag(pub Arc<AtomicBool>);
+pub struct ScanFlag(pub Arc<AtomicBool>);
 
 fn run_mdns_scan(settings: &Settings, devices: &[Device], app_handle: &tauri::AppHandle) {
     let discovered = discovery::discover_adb_devices();
@@ -22,16 +23,24 @@ fn run_mdns_scan(settings: &Settings, devices: &[Device], app_handle: &tauri::Ap
                 .iter()
                 .any(|s| s.contains(&host_port) || s.contains(&svc.host))
             {
-                let _ = adb::adb(settings, None, &["connect", &host_port]);
+                let _ = adb::adb_timeout(settings, None, &["connect", &host_port], Duration::from_secs(5));
             }
         }
     }
     let _ = app_handle.emit("wireless-scan-result", &discovered);
 }
 
-pub fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Arc<AtomicBool>) {
+pub fn worker_loop(
+    app_handle: tauri::AppHandle,
+    flag: Arc<AtomicBool>,
+    scan_flag: Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
+) {
     let mut mdns_counter: u32 = 0;
     let mut adb_server_restarted = false;
+    let mut last_tool_paths = (String::new(), String::new());
+    let mut cached_tools: Option<ToolStatus> = None;
+
     loop {
         if exit.load(Ordering::Relaxed) {
             return;
@@ -45,8 +54,13 @@ pub fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Ar
             let _ = adb::adb(&settings, None, &["kill-server"]);
         }
 
-        let tools = compute_tool_status(&settings);
-        let _ = app_handle.emit("tool-status-updated", &tools);
+        // Re-check tool status only when paths change (binaries don't change at runtime)
+        let current_paths = (settings.adb_path.clone(), settings.scrcpy_path.clone());
+        if cached_tools.is_none() || current_paths != last_tool_paths {
+            cached_tools = Some(compute_tool_status(&settings));
+            last_tool_paths = current_paths;
+        }
+        let _ = app_handle.emit("tool-status-updated", cached_tools.as_ref().unwrap());
 
         let devices = compute_devices(&settings);
         let _ = app_handle.emit("devices-updated", &devices);
@@ -64,10 +78,16 @@ pub fn worker_loop(app_handle: tauri::AppHandle, flag: Arc<AtomicBool>, exit: Ar
             if exit.load(Ordering::Relaxed) {
                 return;
             }
-            if flag.swap(false, Ordering::Relaxed) {
+            let do_refresh = flag.swap(false, Ordering::Relaxed);
+            let do_scan = scan_flag.swap(false, Ordering::Relaxed);
+            if do_refresh || do_scan {
                 let settings = read_settings(&app_handle);
                 let devices = compute_devices(&settings);
-                run_mdns_scan(&settings, &devices, &app_handle);
+                let _ = app_handle.emit("devices-updated", &devices);
+                if do_scan {
+                    mdns_counter = 0;
+                    run_mdns_scan(&settings, &devices, &app_handle);
+                }
                 break;
             }
             std::thread::sleep(Duration::from_millis(100));
@@ -134,15 +154,16 @@ fn compute_devices(settings: &Settings) -> Vec<Device> {
             });
             continue;
         }
-        let model = adb::adb_shell(settings, &serial, &["getprop", "ro.product.model"]).ok();
+        let t = Duration::from_secs(5);
+        let model = adb::adb_shell_timeout(settings, &serial, &["getprop", "ro.product.model"], t).ok();
         let android_version =
-            adb::adb_shell(settings, &serial, &["getprop", "ro.build.version.release"]).ok();
-        let battery = adb::adb_shell(settings, &serial, &["dumpsys", "battery"]).ok();
+            adb::adb_shell_timeout(settings, &serial, &["getprop", "ro.build.version.release"], t).ok();
+        let battery = adb::adb_shell_timeout(settings, &serial, &["dumpsys", "battery"], t).ok();
         let (battery_level, battery_temperature, battery_charging) = battery
             .as_deref()
             .map(adb::parse_battery_info)
             .unwrap_or_default();
-        let stable_id = adb::adb_shell(settings, &serial, &["getprop", "ro.serialno"])
+        let stable_id = adb::adb_shell_timeout(settings, &serial, &["getprop", "ro.serialno"], t)
             .ok()
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| serial.clone());
@@ -225,6 +246,11 @@ pub fn get_open_apps() -> Vec<String> {
 #[tauri::command]
 pub fn trigger_refresh(flag: tauri::State<RefreshFlag>) {
     flag.0.store(true, Ordering::Relaxed);
+}
+
+#[tauri::command]
+pub fn trigger_scan(scan_flag: tauri::State<ScanFlag>) {
+    scan_flag.0.store(true, Ordering::Relaxed);
 }
 
 #[tauri::command]

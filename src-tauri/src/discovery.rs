@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use std::time::Duration;
 
 use mdns_sd::{ServiceDaemon, ServiceEvent};
@@ -10,21 +11,39 @@ const SERVICE_TYPES: &[&str] = &[
     "_adb-tls-connect._tcp.local.",
 ];
 
+// Persistent daemon avoids repeated multicast query bursts from new daemon initialization.
+static DAEMON: Mutex<Option<ServiceDaemon>> = Mutex::new(None);
+
+fn get_daemon() -> Option<ServiceDaemon> {
+    let mut guard = DAEMON.lock().ok()?;
+    if guard.is_none() {
+        *guard = ServiceDaemon::new().ok();
+    }
+    guard.clone()
+}
+
+fn reset_daemon() {
+    if let Ok(mut guard) = DAEMON.lock() {
+        *guard = None;
+    }
+}
+
 pub fn discover_adb_devices() -> Vec<MdnsDiscoveredDevice> {
-    let daemon = match ServiceDaemon::new() {
-        Ok(d) => d,
-        Err(_) => return vec![],
+    let daemon = match get_daemon() {
+        Some(d) => d,
+        None => return vec![],
     };
 
     let mut receivers = Vec::new();
     for stype in SERVICE_TYPES {
-        if let Ok(rx) = daemon.browse(stype) {
-            receivers.push(rx);
+        match daemon.browse(stype) {
+            Ok(rx) => receivers.push(rx),
+            Err(_) => {
+                // Daemon is unhealthy — reset and bail; next call will recreate it
+                reset_daemon();
+                return vec![];
+            }
         }
-    }
-
-    if receivers.is_empty() {
-        return vec![];
     }
 
     let mut devices: Vec<MdnsDiscoveredDevice> = Vec::new();
@@ -42,10 +61,7 @@ pub fn discover_adb_devices() -> Vec<MdnsDiscoveredDevice> {
                 got_event = true;
                 if let ServiceEvent::ServiceResolved(info) = event {
                     let port = info.port;
-                    let stype = info
-                        .ty_domain
-                        .trim_end_matches(".local.")
-                        .to_string();
+                    let stype = info.ty_domain.trim_end_matches(".local.").to_string();
                     for addr in &info.addresses {
                         if !matches!(addr, mdns_sd::ScopedIp::V4(_)) {
                             continue;
@@ -64,6 +80,11 @@ pub fn discover_adb_devices() -> Vec<MdnsDiscoveredDevice> {
         if !got_event && !devices.is_empty() {
             break;
         }
+    }
+
+    // Stop browsing to avoid accumulating receivers on the persistent daemon
+    for stype in SERVICE_TYPES {
+        let _ = daemon.stop_browse(stype);
     }
 
     devices

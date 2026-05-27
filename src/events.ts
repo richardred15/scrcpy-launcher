@@ -449,7 +449,7 @@ export function setupEventDelegation(): void {
         if (target.closest("#scanDevices")) {
             state.scanningNetwork = true;
             updateAppGrid();
-            invoke("trigger_refresh");
+            invoke("trigger_scan");
             return;
         }
 
@@ -927,6 +927,18 @@ export async function init(): Promise<void> {
             ) {
                 state.guideAutoShown = true;
                 showConnectionGuide();
+            }
+        });
+
+        await listen<{ success: boolean; message: string }>("apk-install-result", (event) => {
+            const { success, message } = event.payload;
+            if (success) {
+                state.error = "";
+                updateErrorBanner();
+                if (state.selectedSerial) beginLoadApps(state.selectedSerial);
+            } else {
+                state.error = `Installation failed: ${message}`;
+                updateErrorBanner();
             }
         });
 

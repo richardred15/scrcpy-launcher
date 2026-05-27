@@ -225,10 +225,8 @@ export async function doInstallApk(path: string): Promise<void> {
         return;
     }
     try {
-        const result = await invoke<string>("adb_install", { serial, path });
-        state.error = "";
-        updateErrorBanner();
-        alert(`Installation successful:\n${result}`);
+        await invoke("adb_install", { serial, path });
+        // Result delivered via "apk-install-result" event
     } catch (e: unknown) {
         state.error = `Installation failed: ${String(e)}`;
         updateErrorBanner();
